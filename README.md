@@ -2,10 +2,6 @@
 
 Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达：在后台监听本地 agent 客户端，把运行中任务数、任务摘要和完成提醒放到一个随时可见的状态栏入口里。
 
-项目地址：[github.com/qyuja/Kestra](https://github.com/qyuja/Kestra)
-
-当前源码、可执行文件和 bundle ID 已统一为 `Kestra` / `com.kiannest.kestra`。首次启动新版本时，会兼容迁移旧版本的本地应用数据；旧目录不会被强制删除。
-
 ## 功能
 
 - 状态栏图标显示运行状态；默认使用 Barbell Squat runner：没有任务时站立，有任务时深蹲，并发任务越多速度越快。
