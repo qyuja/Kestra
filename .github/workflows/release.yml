@@ -1,0 +1,98 @@
+name: Release macOS DMG
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Kestra targets macOS 26, so use the arm64 macOS 26 image explicitly.
+    runs-on: macos-26
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          node --version
+
+      - name: Run tests
+        run: |
+          swift test
+          node script/test_pi.mjs
+          node script/test_opencode.mjs
+
+      - name: Resolve release tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          if [[ "$tag" != v* ]]; then
+            tag="v$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release app
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+          BUILD_CONFIGURATION: release
+        run: ./script/build_and_run.sh package
+
+      - name: Create and verify DMG
+        id: dmg
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d -t kestra-release)"
+          ditto dist/Kestra.app "$staging/Kestra.app"
+          ln -s /Applications "$staging/Applications"
+          dmg_path="dist/Kestra-${TAG}.dmg"
+          hdiutil create -volname Kestra -srcfolder "$staging" -ov -format UDZO "$dmg_path"
+          hdiutil verify "$dmg_path"
+          echo "path=$dmg_path" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(shasum -a 256 "$dmg_path" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
+          DMG_PATH: ${{ steps.dmg.outputs.path }}
+          DMG_SHA256: ${{ steps.dmg.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG_PATH" --clobber
+          else
+            gh release create "$TAG" "$DMG_PATH" \
+              --target "$TARGET_SHA" \
+              --title "Kestra $TAG" \
+              --generate-notes
+          fi
+          echo "Published $DMG_PATH ($DMG_SHA256)"

@@ -5,6 +5,8 @@ MODE="${1:-run}"
 APP_NAME="Kestra"
 BUNDLE_ID="com.kiannest.kestra"
 MIN_SYSTEM_VERSION="26.0"
+BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
+APP_VERSION="${APP_VERSION:-1.0}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -16,9 +18,10 @@ INFO_PLIST="$APP_CONTENTS/Info.plist"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
 
-swift build
-BUILD_BINARY="$(swift build --show-bin-path)/$APP_NAME"
-BUILD_RESOURCE_BUNDLE="$(swift build --show-bin-path)/${APP_NAME}_${APP_NAME}.bundle"
+swift build --configuration "$BUILD_CONFIGURATION"
+BUILD_BIN_DIR="$(swift build --configuration "$BUILD_CONFIGURATION" --show-bin-path)"
+BUILD_BINARY="$BUILD_BIN_DIR/$APP_NAME"
+BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${APP_NAME}_${APP_NAME}.bundle"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS"
@@ -40,7 +43,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleDisplayName</key>
   <string>Kestra</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0</string>
+  <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CFBundlePackageType</key>
@@ -62,6 +65,8 @@ open_app() {
 }
 
 case "$MODE" in
+  package)
+    ;;
   run)
     open_app
     ;;
@@ -82,7 +87,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [package|run|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

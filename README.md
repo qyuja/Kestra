@@ -46,6 +46,15 @@ node script/test_pi.mjs
 node script/test_opencode.mjs
 ```
 
+发布 DMG：
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `Kestra-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
+
 应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成未签名的本地调试包。
 
 ## 图标插件
