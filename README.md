@@ -4,7 +4,7 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 
 项目地址：[github.com/qyuja/Kestra](https://github.com/qyuja/Kestra)
 
-> 当前源码仍使用开发期的可执行文件名 `IslandBarDemo`、显示名称 `AI Task Radar` 和 bundle ID `com.kiannest.islandbar`。这些标识暂未迁移，以保留已有本地账号、设置和任务数据。
+当前源码、可执行文件和 bundle ID 已统一为 `Kestra` / `com.kiannest.kestra`。首次启动新版本时，会兼容迁移旧版本的本地应用数据；旧目录不会被强制删除。
 
 ## 功能
 
@@ -50,14 +50,14 @@ node script/test_pi.mjs
 node script/test_opencode.mjs
 ```
 
-应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/IslandBarDemo.app` 生成未签名的本地调试包。
+应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成未签名的本地调试包。
 
 ## 图标插件
 
 插件目录为：
 
 ```text
-~/Library/Application Support/com.kiannest.islandbar/icon-plugins
+~/Library/Application Support/com.kiannest.kestra/icon-plugins
 ```
 
 每个子目录包含一个 `manifest.json`，资源插件支持：
@@ -78,7 +78,7 @@ node script/test_opencode.mjs
 - Kestra 的任务监听在本机完成，不上传任务标题、对话摘要或 Hook 事件到 Kestra 服务。
 - Codex、Claude Code 和其他客户端仍按它们自己的协议访问各自服务；Kestra 不替换模型请求。
 - 账号切换只保存必要的本地账号元数据；凭据保存在客户端文件或 macOS 钥匙串中，不写入任务列表、README、日志或 Git 仓库。
-- 应用数据默认位于 `~/Library/Application Support/com.kiannest.islandbar/`；Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
+- 应用数据默认位于 `~/Library/Application Support/com.kiannest.kestra/`；Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
 - 应用不会扫描或上传完整历史；任务预览只读取界面需要的截断内容。
 
 ## 当前限制

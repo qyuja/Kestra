@@ -2,8 +2,8 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="IslandBarDemo"
-BUNDLE_ID="com.kiannest.islandbar"
+APP_NAME="Kestra"
+BUNDLE_ID="com.kiannest.kestra"
 MIN_SYSTEM_VERSION="26.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -36,9 +36,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
-  <string>AI Task Radar</string>
+  <string>Kestra</string>
   <key>CFBundleDisplayName</key>
-  <string>AI Task Radar</string>
+  <string>Kestra</string>
   <key>CFBundleShortVersionString</key>
   <string>1.0</string>
   <key>CFBundleVersion</key>

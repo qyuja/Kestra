@@ -1,9 +1,9 @@
 # Menu bar icon plugins
 
-IslandBarDemo can load resource-only icon plugins from:
+Kestra can load resource-only icon plugins from:
 
 ```text
-~/Library/Application Support/com.kiannest.islandbar/icon-plugins
+~/Library/Application Support/com.kiannest.kestra/icon-plugins
 ```
 
 Create one subdirectory per plugin and put a `manifest.json` in it. A plugin
@@ -46,4 +46,4 @@ Plugin authors are responsible for the licenses of their own PNG assets. This
 example contains no image asset and uses the macOS `circle` SF Symbol, which
 is subject to Apple's SF Symbols license and the platform's usage terms. The
 built-in barbell-squat artwork remains covered by the Apache-2.0 notice in
-`Sources/IslandBarDemo/Resources/RunnerGallery-LICENSE.txt`.
+`Sources/Kestra/Resources/RunnerGallery-LICENSE.txt`.

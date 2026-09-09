@@ -3,24 +3,24 @@
 import PackageDescription
 
 let package = Package(
-    name: "IslandBarDemo",
+    name: "Kestra",
     platforms: [
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "IslandBarDemo", targets: ["IslandBarDemo"])
+        .executable(name: "Kestra", targets: ["Kestra"])
     ],
     targets: [
         .executableTarget(
-            name: "IslandBarDemo",
-            path: "Sources/IslandBarDemo",
+            name: "Kestra",
+            path: "Sources/Kestra",
             resources: [
                 .process("Resources")
             ]
         ),
         .testTarget(
-            name: "IslandBarDemoTests",
-            dependencies: ["IslandBarDemo"]
+            name: "KestraTests",
+            dependencies: ["Kestra"]
         )
     ]
 )

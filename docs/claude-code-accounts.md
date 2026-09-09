@@ -19,7 +19,7 @@
 ## 数据与失败恢复
 
 - 账号元数据：应用 Task Bridge 根目录下 `claude/accounts.json`（0600）。
-- 账号登录快照及恢复备份：macOS 钥匙串，service 为 `com.kiannest.islandbar.claude-accounts`；不把 OAuth token 写入日志或账号元数据。
+- 账号登录快照及恢复备份：macOS 钥匙串，service 为 `com.kiannest.kestra.claude-accounts`；升级时兼容读取旧的 `com.kiannest.islandbar.claude-accounts`；不把 OAuth token 写入日志或账号元数据。
 - 写入前在钥匙串备份原登录，持久化 `claude/pending-switch.json`（仅恢复项 ID）；异常时尝试还原。进程被终止后再次启动，存在标记就禁止新切换并提供“恢复原账号”。
 - 删除为“移除登记”：保留钥匙串缓存和历史。登录临时目录和恢复快照目前保留，尚未做自动清理。
 - 使用 `auth status` 校验身份一致性；这是本地登录状态检查，不等价于向模型服务发请求验证 token 未被撤销。过期缓存会要求重新登录，不进行后台私有 OAuth 刷新。

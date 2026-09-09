@@ -3,13 +3,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // Only in-memory fixtures: no events or prompts written into the real user profile.
-const source = await readFile(new URL("../Sources/IslandBarDemo/Resources/islandbar-pi.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../Sources/Kestra/Resources/kestra-pi.js", import.meta.url), "utf8");
 const pending = new Map();
 const events = [];
 const handlers = new Map();
 let tools = ["read", "bash"];
 const factory = new Function("mkdir", "writeFile", "rename", "homedir", "join", "randomUUID",
-  source.replace(/^import .*;$/gm, "").replace("export default function", "function") + "\nreturn islandbar;");
+  source.replace(/^import .*;$/gm, "").replace("export default function", "function") + "\nreturn kestra;");
 factory(async () => {}, async (path, data) => pending.set(path, data),
   async (path) => { events.push(JSON.parse(pending.get(path))); pending.delete(path); },
   () => "/test", join, () => "fixture")({

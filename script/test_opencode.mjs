@@ -3,11 +3,11 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 // Keep fixtures entirely in memory, never emit events into the user's task list.
-const source = await readFile(new URL("../Sources/IslandBarDemo/Resources/islandbar-opencode.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../Sources/Kestra/Resources/kestra-opencode.js", import.meta.url), "utf8");
 const pending = new Map();
 const events = [];
 const factory = new Function("mkdir", "writeFile", "rename", "homedir", "join", "randomUUID",
-  source.replace(/^import .*;$/gm, "").replace("export const IslandBarPlugin", "const IslandBarPlugin") + "\nreturn IslandBarPlugin;");
+  source.replace(/^import .*;$/gm, "").replace("export const KestraPlugin", "const KestraPlugin") + "\nreturn KestraPlugin;");
 const plugin = await factory(
   async () => {},
   async (path, body) => pending.set(path, body),

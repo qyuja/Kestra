@@ -6,12 +6,12 @@
 
 #### 切换耗时日志
 
-使用 macOS 统一日志，subsystem 为 `com.kiannest.islandbar`，category 为 `AccountSwitchTiming`，级别 notice。每次允许开始的切换生成随机 attempt ID，各阶段结束记录 elapsed_ms 和自本次点击起累计的 total_ms，最后 stage=total 汇总。记录失败阶段、超时和退出取消；恢复启动成功时总结果仍是 failed。不会记录邮箱、账号 ID、文件内容、路径、凭据或原始错误。
+使用 macOS 统一日志，subsystem 为 `com.kiannest.kestra`，category 为 `AccountSwitchTiming`，级别 notice。每次允许开始的切换生成随机 attempt ID，各阶段结束记录 elapsed_ms 和自本次点击起累计的 total_ms，最后 stage=total 汇总。记录失败阶段、超时和退出取消；恢复启动成功时总结果仍是 failed。不会记录邮箱、账号 ID、文件内容、路径、凭据或原始错误。
 
 阶段包含首次任务列表/扫描、文件预检、原目录确认、目标/当前身份查询、退出前任务列表/扫描、正常退出、停止监听、凭据备份、账号映射保存、凭据安装、启动、目录/身份验证和状态发布。切换身份查询现在只请求 account/read，不再等待额度；工作区核对使用同目录文件型登录缓存的 tokens.account_id，缺失时不会放宽已有工作区匹配。launchApplication 包含现有 750ms 等待，不代表界面完全就绪。此前日志中的身份阶段曾包含额度读取，比较前后耗时时应注意此变化。
 
 ```sh
-/usr/bin/log show --last 30m --style compact --predicate 'subsystem == "com.kiannest.islandbar" AND category == "AccountSwitchTiming"'
+/usr/bin/log show --last 30m --style compact --predicate 'subsystem == "com.kiannest.kestra" AND category == "AccountSwitchTiming"'
 ```
 
 实时观察可把 `show --last 30m` 改为 `stream`。日志由 macOS 管理保存和清理，不另建应用日志文件。此轮使用注入时钟的测试验证阶段计时、总计、恢复结果和取消；真实切换耗时需要一次用户主动切换后采集。
@@ -51,15 +51,15 @@ Codex 账号 A 和账号 B 可以访问同一个本地项目目录，但它们�
 - 多个 Plus 账号分别登录、分别消耗额度。
 - 账号 A 的任务因额度不足暂停后，用户可以手动切换到账号 B。
 - 账号 B 在同一个项目目录中继续原任务。
-- IslandBar 将多个账号下的会话聚合为一张任务卡。
+- Kestra 将多个账号下的会话聚合为一张任务卡。
 - 保留任务从账号 A 到账号 B 的完整交接链路。
 
 本方案不承诺跨账号恢复同一个 Codex 对话 thread。实际实现是“同一个本地任务，多个账号会话接力”。
 
-当前代码骨架位于 `Sources/IslandBarDemo/TaskBridge`，运行后会创建：
+当前代码骨架位于 `Sources/Kestra/TaskBridge`，运行后会创建：
 
 ```text
-~/Library/Application Support/com.kiannest.islandbar/task-bridge/
+~/Library/Application Support/com.kiannest.kestra/task-bridge/
 ├── accounts.json
 ├── tasks/
 ├── messages/
@@ -78,10 +78,10 @@ Codex 账号 A 和账号 B 可以访问同一个本地项目目录，但它们�
 
 ### 2.1 任务和会话分离
 
-`taskId` 是 IslandBar 自己维护的稳定任务标识，不等于 Codex 的 `threadId`。
+`taskId` 是 Kestra 自己维护的稳定任务标识，不等于 Codex 的 `threadId`。
 
 ```text
-taskId:      islandbar-task-001       // 跨账号保持不变
+taskId:      kestra-task-001       // 跨账号保持不变
 sessionId A: codex-thread-a           // 账号 A 的会话
 sessionId B: codex-thread-b           // 账号 B 的会话
 ```
@@ -126,7 +126,7 @@ Codex 官方文档说明登录缓存位于 `auth.json` 或系统凭据存储中�
 └─────────────────────────────┘
 
 ┌─────────────────────────────┐
-│ IslandBar                    │
+│ Kestra                      │
 │ status item + task popover   │
 └──────────────┬──────────────┘
                │ local IPC / bridge API
@@ -134,7 +134,7 @@ Codex 官方文档说明登录缓存位于 `auth.json` 或系统凭据存储中�
         Local Task Bridge
 ```
 
-MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态、创建交接和触发下一账号会话。Codex 官方支持通过 MCP 连接外部工具，桌面版、CLI 和 IDE 扩展也支持 MCP 配置。[MCP](https://learn.chatgpt.com/docs/extend/mcp)
+MCP 负责让 Codex 会话读写任务上下文；Kestra 负责展示状态、创建交接和触发下一账号会话。Codex 官方支持通过 MCP 连接外部工具，桌面版、CLI 和 IDE 扩展也支持 MCP 配置。[MCP](https://learn.chatgpt.com/docs/extend/mcp)
 
 如果未来需要从应用侧深度控制会话、订阅 agent 事件或主动发送新一轮消息，再接入 Codex App Server。App Server 是 Codex 用于嵌入产品的双向 JSON-RPC 接口。[Codex App Server](https://learn.chatgpt.com/docs/app-server)
 
@@ -144,10 +144,10 @@ MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态�
 
 ```json
 {
-  "taskId": "islandbar-task-001",
-  "projectPath": "/Projects/IslandBarDemo",
+  "taskId": "kestra-task-001",
+  "projectPath": "/Projects/Kestra",
   "branch": "main",
-  "worktreePath": "/Projects/IslandBarDemo",
+  "worktreePath": "/Projects/Kestra",
   "status": "paused_quota",
   "activeAccountId": "account-a",
   "activeSessionId": "codex-thread-a",
@@ -162,7 +162,7 @@ MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态�
     "使用本地 Task Bridge，不共享账号凭据"
   ],
   "filesChanged": [
-    "Sources/IslandBarDemo/Models/CodexTaskStore.swift"
+    "Sources/Kestra/Models/CodexTaskStore.swift"
   ],
   "tests": [
     "swift test"
@@ -189,7 +189,7 @@ MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态�
 ### 5.1 账号 A 额度耗尽
 
 1. Codex 任务进入暂停、失败或等待用户处理状态。
-2. IslandBar 任务卡显示：
+2. Kestra 任务卡显示：
 
    ```text
    已暂停 · 额度不足 · 账号 A
@@ -197,15 +197,15 @@ MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态�
 
 3. 用户点击「生成交接」。
 4. Bridge 写入一个不可变的 `HandoffSnapshot`。
-5. IslandBar 保留账号 A 的 session 记录，不删除原任务。
+5. Kestra 保留账号 A 的 session 记录，不删除原任务。
 
 如果账号 A 仍能响应，可以请求它生成更完整的摘要；如果已经无法继续，则使用已有事件、用户消息、Git diff、测试记录和项目文件生成最低限度的交接信息。
 
 ### 5.2 手动切换账号 B
 
-1. 用户在 IslandBar 账号选择器中选择账号 B。
+1. 用户在 Kestra 账号选择器中选择账号 B。
 2. 用户点击「从交接继续」。
-3. IslandBar 在同一个 `projectPath` 启动账号 B 的 Codex session。
+3. Kestra 在同一个 `projectPath` 启动账号 B 的 Codex session。
 4. 将 `HandoffSnapshot` 转换成可编辑的 continuation prompt。
 5. 账号 B 先读取项目状态和交接信息，再继续执行。
 6. Bridge 将 `activeSessionId` 切换到账号 B，并记录 `A → B` 的会话关系。
@@ -242,7 +242,7 @@ MCP 负责让 Codex 会话读写任务上下文；IslandBar 负责展示状态�
 
 ## 6. Bridge 接口
 
-桌面端优先采用项目文件交接。IslandBar 生成 Markdown 后，账号 B 在同一个项目的 Local 环境中读取：
+桌面端优先采用项目文件交接。Kestra 生成 Markdown 后，账号 B 在同一个项目的 Local 环境中读取：
 
 ```text
 请先读取 .codex/task-bridge/<taskId>/<handoffId>.md，
@@ -263,7 +263,7 @@ task_release_lease(taskId, sessionId)
 
 约束：
 
-- `taskId` 必须由 IslandBar 创建或显式绑定。
+- `taskId` 必须由 Kestra 创建或显式绑定。
 - 账号会话不能修改其他任务。
 - `task_create_handoff` 生成不可变快照，不覆盖历史交接。
 - `task_update_state` 只允许更新任务状态和工作摘要。
@@ -274,11 +274,11 @@ task_release_lease(taskId, sessionId)
 
 MCP 工具是按需调用的。账号 B 不会因为 Bridge 中出现新消息就自动收到一条模型上下文消息；它需要在下一轮中调用 `task_get_context` 或 `task_list_messages`。
 
-如果未来要求两个会话实时互相发消息，需要由 IslandBar 或 App Server 作为编排器，将消息转换成目标会话的新一轮输入。这个能力属于第二阶段，不作为手动账号切换的前置条件。
+如果未来要求两个会话实时互相发消息，需要由 Kestra 或 App Server 作为编排器，将消息转换成目标会话的新一轮输入。这个能力属于第二阶段，不作为手动账号切换的前置条件。
 
 ## 7. 账号 Profile
 
-IslandBar 只管理账号的本地显示信息和配置目录映射：
+Kestra 只管理账号的本地显示信息和配置目录映射：
 
 ```text
 account-a
@@ -290,7 +290,7 @@ account-b
   codexHome: <local codex home B>
 ```
 
-首次添加账号时，用户在对应的 Codex 配置目录中完成官方登录。IslandBar 不采集密码；重启切换时仅在本机操作文件型登录缓存，按 2.3 的备份和权限规则执行。
+首次添加账号时，用户在对应的 Codex 配置目录中完成官方登录。Kestra 不采集密码；重启切换时仅在本机操作文件型登录缓存，按 2.3 的备份和权限规则执行。
 
 账号切换只影响新启动的 Codex session。已经运行的 session 继续归属于原账号，不能在运行中强行替换身份。
 
@@ -321,7 +321,7 @@ account-b
 
 项目目录共用不等于文件写入可以并发。
 
-## 9. IslandBar UI 规划
+## 9. Kestra UI 规划
 
 ### 账号管理
 
@@ -370,7 +370,7 @@ account-b
 
 - 接入各账号的 Codex App Server。
 - 监听 session、turn、额度错误和完成事件。
-- 支持从 IslandBar 发起新的 continuation turn。
+- 支持从 Kestra 发起新的 continuation turn。
 - 仅在确认稳定后考虑实时双向消息。
 
 ## 11. 暂不实现
@@ -396,7 +396,7 @@ account-b
 - 两个账号可以指向同一个项目目录。
 - A 的任务暂停后，可以生成交接快照。
 - B 可以在同一项目目录创建新会话并继续。
-- IslandBar 能将 A、B 的 session 显示为同一个逻辑任务。
+- Kestra 能将 A、B 的 session 显示为同一个逻辑任务。
 - 原任务的文件修改、测试结果和下一步不会因账号切换丢失。
 - Bridge 不包含任何 token、密码或 API key。
 - 在并行场景下，同一 worktree 不会被两个会话同时获得写入 lease。

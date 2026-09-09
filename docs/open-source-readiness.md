@@ -1,6 +1,6 @@
 # 开源准备
 
-本项目产品名为 Kestra，仓库已公开在 [github.com/qyuja/Kestra](https://github.com/qyuja/Kestra)，源码许可证为根目录的 MIT License。本轮不迁移本地数据、不改 bundle ID、不上传文件。
+本项目产品名为 Kestra，仓库已公开在 [github.com/qyuja/Kestra](https://github.com/qyuja/Kestra)，源码许可证为根目录的 MIT License。应用标识已统一为 `com.kiannest.kestra`，首次启动会兼容迁移旧版本本地数据。
 
 ## 发布前必须确认
 
