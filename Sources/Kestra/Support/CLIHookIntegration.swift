@@ -48,13 +48,13 @@ struct CLIHookIntegration {
     var configured: Bool {
         if provider == .cursor { return CursorHookIntegration.isConfigured(at: directory.appendingPathComponent(filename)) }
         if provider == .pi {
-            guard let expected = Bundle.module.url(forResource: "kestra-pi", withExtension: "js"),
+            guard let expected = KestraResourceBundle.bundle.url(forResource: "kestra-pi", withExtension: "js"),
                   let data = try? Data(contentsOf: expected),
                   let installed = try? Data(contentsOf: directory.appendingPathComponent("extensions/islandbar.js")) else { return false }
             return data == installed
         }
         if provider == .opencode {
-            guard let expected = Bundle.module.url(forResource: "kestra-opencode", withExtension: "js"),
+            guard let expected = KestraResourceBundle.bundle.url(forResource: "kestra-opencode", withExtension: "js"),
                   let data = try? Data(contentsOf: expected),
                   let installed = try? Data(contentsOf: directory.appendingPathComponent("plugins/islandbar.js")) else { return false }
             return data == installed
@@ -76,7 +76,7 @@ struct CLIHookIntegration {
             return
         }
         if provider == .pi {
-            guard let resource = Bundle.module.url(forResource: "kestra-pi", withExtension: "js") else { throw CocoaError(.fileNoSuchFile) }
+            guard let resource = KestraResourceBundle.bundle.url(forResource: "kestra-pi", withExtension: "js") else { throw CocoaError(.fileNoSuchFile) }
             let target = directory.appendingPathComponent("extensions/islandbar.js")
             try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             if FileManager.default.fileExists(atPath: target.path) {
@@ -86,7 +86,7 @@ struct CLIHookIntegration {
             return
         }
         if provider == .opencode {
-            guard let resource = Bundle.module.url(forResource: "kestra-opencode", withExtension: "js") else {
+            guard let resource = KestraResourceBundle.bundle.url(forResource: "kestra-opencode", withExtension: "js") else {
                 throw CocoaError(.fileNoSuchFile)
             }
             let target = directory.appendingPathComponent("plugins/islandbar.js")

@@ -55,7 +55,9 @@ git push origin v0.1.1
 
 推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `Kestra-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
 
-应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成未签名的本地调试包。
+Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeeper。要让其他 Mac 直接双击打开，需要在仓库 Secrets 配置 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_KEYCHAIN_PASSWORD`，以及 notarization 所需的 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD`。
+
+应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成经过完整 bundle 校验的本地调试包；没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
 
 ## 图标插件
 

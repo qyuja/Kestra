@@ -53,7 +53,7 @@ enum MenuBarIconPluginCatalog {
         var errors: [String] = []
 
         let squatFrames = (0..<8).compactMap { frame in
-            Bundle.module.url(
+            KestraResourceBundle.bundle.url(
                 forResource: "barbell-squat-frame-\(frame)",
                 withExtension: "png"
             ).flatMap(NSImage.init(contentsOf:))

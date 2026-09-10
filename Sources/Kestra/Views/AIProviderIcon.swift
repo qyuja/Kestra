@@ -11,7 +11,7 @@ enum AIProviderLogoCatalog {
             return cachedImage
         }
 
-        guard let resourceURL = Bundle.module.url(
+        guard let resourceURL = KestraResourceBundle.bundle.url(
             forResource: resourceName,
             withExtension: "png"
         ), let image = NSImage(contentsOf: resourceURL) else {
