@@ -59,6 +59,13 @@ Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeepe
 
 应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成经过完整 bundle 校验的本地调试包；没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
 
+如果下载后 macOS 提示无法验证开发者或应用不安全，请先确认 DMG 来源可信，将 `Kestra.app` 拖入“应用程序”，再执行（命令是 `xattr`，不是 `xttr`）：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Kestra.app
+open /Applications/Kestra.app
+```
+
 ## 图标插件
 
 插件目录为：
