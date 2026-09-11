@@ -2,6 +2,33 @@ import XCTest
 @testable import Kestra
 
 final class KestraAppIdentityTests: XCTestCase {
+    func testRewritesPersistedLegacyApplicationSupportPaths() throws {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KestraIdentity-(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let legacyPath = home
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent(KestraAppIdentity.legacyBundleIdentifier, isDirectory: true)
+            .appendingPathComponent("task-bridge/profiles/account/codex", isDirectory: true)
+        let expectedPath = home
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent(KestraAppIdentity.bundleIdentifier, isDirectory: true)
+            .appendingPathComponent("task-bridge/profiles/account/codex", isDirectory: true)
+
+        XCTAssertEqual(
+            KestraAppIdentity.migratedApplicationSupportURL(legacyPath, homeDirectory: home),
+            expectedPath
+        )
+        XCTAssertEqual(
+            KestraAppIdentity.migratedApplicationSupportURL(
+                home.appendingPathComponent("Library/Other", isDirectory: true),
+                homeDirectory: home
+            ),
+            home.appendingPathComponent("Library/Other", isDirectory: true)
+        )
+    }
+
     func testMovesLegacyApplicationDataIntoKestraDirectory() throws {
         let home = FileManager.default.temporaryDirectory
             .appendingPathComponent("KestraIdentity-\(UUID().uuidString)", isDirectory: true)

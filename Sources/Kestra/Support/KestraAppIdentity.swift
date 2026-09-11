@@ -15,6 +15,31 @@ enum KestraAppIdentity {
         applicationSupportDirectory(for: legacyBundleIdentifier)
     }
 
+    /// Rewrites app-owned paths persisted before the IslandBarDemo -> Kestra
+    /// rename. The directory migration moves the files, but paths embedded in
+    /// account metadata need their own migration.
+    static func migratedApplicationSupportURL(
+        _ url: URL,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> URL {
+        let legacyRoot = applicationSupportDirectory(
+            for: legacyBundleIdentifier,
+            homeDirectory: homeDirectory
+        ).standardizedFileURL
+        let currentRoot = applicationSupportDirectory(
+            for: bundleIdentifier,
+            homeDirectory: homeDirectory
+        ).standardizedFileURL
+        let legacyPrefix = legacyRoot.path + "/"
+        let path = url.standardizedFileURL.path
+
+        guard path.hasPrefix(legacyPrefix) else { return url }
+        let relativePath = String(path.dropFirst(legacyPrefix.count))
+        return currentRoot
+            .appendingPathComponent(relativePath, isDirectory: url.hasDirectoryPath)
+            .standardizedFileURL
+    }
+
     /// Moves the old app-owned files once and merges non-conflicting children
     /// when a partial migration already created the new directory. Existing
     /// new files always win; the legacy directory is never deleted.

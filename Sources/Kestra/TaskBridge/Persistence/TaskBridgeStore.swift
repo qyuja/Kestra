@@ -32,7 +32,16 @@ actor TaskBridgeStore {
         guard FileManager.default.fileExists(atPath: paths.accountsFile.path) else {
             return []
         }
-        return try readJSON([CodexAccountProfile].self, from: paths.accountsFile)
+        let profiles = try readJSON([CodexAccountProfile].self, from: paths.accountsFile)
+        let migratedProfiles = profiles.map { profile in
+            var profile = profile
+            profile.codexHomePath = KestraAppIdentity.migratedApplicationSupportURL(profile.codexHomePath)
+            return profile
+        }
+        if migratedProfiles != profiles {
+            try saveAccountProfiles(migratedProfiles)
+        }
+        return migratedProfiles
     }
 
     func renameAccount(id: String, name: String) throws -> [CodexAccountProfile] {
