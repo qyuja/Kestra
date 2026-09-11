@@ -8,6 +8,7 @@ final class IslandStatusItemController: NSObject {
     private let store: CodexTaskStore
     private let providerSelection: AIProviderSelectionStore
     private let previewSettings: CodexTaskPreviewSettingsStore
+    private let updater: KestraUpdater
     private let onOpenTask: (CodexTask) -> Void
     private let onOpenCodex: () -> Void
     private let onOpenClaude: () -> Void
@@ -32,6 +33,7 @@ final class IslandStatusItemController: NSObject {
         store: CodexTaskStore,
         providerSelection: AIProviderSelectionStore,
         previewSettings: CodexTaskPreviewSettingsStore,
+        updater: KestraUpdater,
         onOpenTask: @escaping (CodexTask) -> Void,
         onOpenCodex: @escaping () -> Void,
         onOpenClaude: @escaping () -> Void,
@@ -42,6 +44,7 @@ final class IslandStatusItemController: NSObject {
         self.store = store
         self.providerSelection = providerSelection
         self.previewSettings = previewSettings
+        self.updater = updater
         self.onOpenTask = onOpenTask
         self.onOpenCodex = onOpenCodex
         self.onOpenClaude = onOpenClaude
@@ -232,6 +235,7 @@ final class IslandStatusItemController: NSObject {
                     squatRunner: squatRunner,
                     providerSelection: providerSelection,
                     previewSettings: previewSettings,
+                    updater: updater,
                     animationPlugins: animationPlugins,
                     animationSettings: animationSettings,
                     onPreviewAnimation: { [weak self] identifier in

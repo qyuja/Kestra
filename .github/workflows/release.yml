@@ -55,7 +55,43 @@ jobs:
             tag="v$tag"
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          version="${tag#v}"
+          version_core="${version%%-*}"
+          IFS='.' read -r major minor patch _ <<< "$version_core"
+          major="${major:-0}"
+          minor="${minor:-0}"
+          patch="${patch:-0}"
+          if ! [[ "$major" =~ ^[0-9]+$ && "$minor" =~ ^[0-9]+$ && "$patch" =~ ^[0-9]+$ ]]; then
+            echo "Release tag must use a numeric semver such as v0.1.4." >&2
+            exit 1
+          fi
+          build_version=$((10#$major * 1000000 + 10#$minor * 1000 + 10#$patch))
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_version=$build_version" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Sparkle publishing tools
+        id: sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sparkle_version="2.9.6"
+          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Sparkle signing key is not configured; publishing the DMG only."
+            exit 0
+          fi
+
+          sparkle_root="$RUNNER_TEMP/Sparkle-$sparkle_version"
+          sparkle_archive="$RUNNER_TEMP/Sparkle-for-Swift-Package-Manager-$sparkle_version.zip"
+          curl --fail --silent --show-error --location \
+            "https://github.com/sparkle-project/Sparkle/releases/download/$sparkle_version/Sparkle-for-Swift-Package-Manager.zip" \
+            --output "$sparkle_archive"
+          mkdir -p "$sparkle_root"
+          ditto -x -k "$sparkle_archive" "$sparkle_root"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "tools=$sparkle_root/bin" >> "$GITHUB_OUTPUT"
 
       - name: Prepare signing identity
         id: signing
@@ -100,8 +136,10 @@ jobs:
       - name: Build release app
         env:
           APP_VERSION: ${{ steps.release.outputs.version }}
+          APP_BUILD_VERSION: ${{ steps.release.outputs.build_version }}
           BUILD_CONFIGURATION: release
           SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          SPARKLE_ENABLED: ${{ steps.sparkle.outputs.enabled }}
         run: ./script/build_and_run.sh package
 
       - name: Validate app bundle
@@ -152,6 +190,50 @@ jobs:
             echo "::warning::The DMG is structurally valid but is not notarized. Configure Developer ID and notarization secrets for normal double-click installation."
           fi
 
+      - name: Create and sign Sparkle update archive
+        id: sparkle_update
+        if: ${{ steps.sparkle.outputs.enabled == 'true' }}
+        env:
+          SPARKLE_TOOLS: ${{ steps.sparkle.outputs.tools }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_ED25519_PRIVATE_KEY }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+          SPARKLE_NOTARIZATION_READY: ${{ env.HAS_NOTARIZATION_CREDENTIALS }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          updates_dir="$RUNNER_TEMP/kestra-updates"
+          mkdir -p "$updates_dir"
+          zip_path="$updates_dir/Kestra-${TAG}.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/Kestra.app "$zip_path"
+
+          if [[ "$SIGNING_MODE" == "developer-id" && "$SPARKLE_NOTARIZATION_READY" == "true" ]]; then
+            xcrun notarytool submit "$zip_path" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait
+            xcrun stapler staple dist/Kestra.app
+            rm -f "$zip_path"
+            ditto -c -k --sequesterRsrc --keepParent dist/Kestra.app "$zip_path"
+          else
+            echo "::warning::Sparkle archive is signed by Sparkle but not notarized. Configure Developer ID and notarization secrets for Gatekeeper-friendly updates."
+          fi
+
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_TOOLS/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/qyuja/Kestra/releases/download/$TAG/" \
+            --maximum-deltas 0 \
+            "$updates_dir"
+          test -s "$updates_dir/appcast.xml"
+          grep -q 'sparkle:edSignature=' "$updates_dir/appcast.xml"
+          xmllint --noout "$updates_dir/appcast.xml"
+          echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
+          echo "appcast_path=$updates_dir/appcast.xml" >> "$GITHUB_OUTPUT"
+
       - name: Compute final DMG checksum
         id: final_dmg
         env:
@@ -168,13 +250,22 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
           DMG_PATH: ${{ steps.dmg.outputs.path }}
           DMG_SHA256: ${{ steps.final_dmg.outputs.sha256 }}
+          SPARKLE_ENABLED: ${{ steps.sparkle.outputs.enabled }}
+          SPARKLE_ZIP_PATH: ${{ steps.sparkle_update.outputs.zip_path }}
+          APPCAST_PATH: ${{ steps.sparkle_update.outputs.appcast_path }}
         shell: bash
         run: |
           set -euo pipefail
+          assets=("$DMG_PATH")
+          if [[ "$SPARKLE_ENABLED" == "true" ]]; then
+            test -f "$SPARKLE_ZIP_PATH"
+            test -f "$APPCAST_PATH"
+            assets+=("$SPARKLE_ZIP_PATH" "$APPCAST_PATH")
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$DMG_PATH" --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
           else
-            gh release create "$TAG" "$DMG_PATH" \
+            gh release create "$TAG" "${assets[@]}" \
               --target "$TARGET_SHA" \
               --title "Kestra $TAG" \
               --generate-notes

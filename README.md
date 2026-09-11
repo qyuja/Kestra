@@ -39,6 +39,12 @@ swift test
 ./script/build_and_run.sh --verify
 ```
 
+发布构建会接入 Sparkle 自动更新：应用每天后台检查一次更新，发现新版本后由系统更新界面确认下载、验证并重启替换。开发构建默认不启用更新源；需要本地验证时可执行：
+
+```bash
+SPARKLE_ENABLED=true ./script/build_and_run.sh package
+```
+
 协议适配器的隔离测试：
 
 ```bash
@@ -56,6 +62,8 @@ git push origin v0.1.1
 推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `Kestra-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
 
 Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeeper。要让其他 Mac 直接双击打开，需要在仓库 Secrets 配置 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_KEYCHAIN_PASSWORD`，以及 notarization 所需的 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD`。
+
+自动更新发布还需要配置 `SPARKLE_ED25519_PRIVATE_KEY` Secret。它只用于 GitHub Actions 给更新 archive 和 appcast 签名，不能提交到仓库。没有这个 Secret 时，Actions 仍会发布 DMG，但不会把该版本作为应用内自动更新源发布。
 
 应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成经过完整 bundle 校验的本地调试包；没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
 
@@ -97,7 +105,8 @@ open /Applications/Kestra.app
 
 ## 当前限制
 
-- 这是 macOS 26 的本地开发包，尚未提供签名、notarization、安装器或自动更新。
+- 默认发布链路仍允许 ad-hoc 签名；没有 Developer ID 和 notarization 时，DMG 和自动更新包可以做结构验证，但其他 Mac 可能仍需要右键打开或移除 quarantine。
+- 自动更新依赖 GitHub Release 的 `appcast.xml` 和 Sparkle Ed25519 签名；发布前必须配置 `SPARKLE_ED25519_PRIVATE_KEY`，并建议同时配置 Developer ID/notarization。
 - 各客户端 Hook / 插件协议会随客户端版本变化；协议单元测试不等于真实客户端端到端验证。
 - 客户端被强制结束且没有产生结束事件时，Kestra 无法凭本地协议准确推断任务已结束。
 - Claude Code 的真实账号切换尚未完成双账号端到端验收；不应把隔离测试当成真实登录验证。

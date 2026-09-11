@@ -10,9 +10,15 @@ let package = Package(
     products: [
         .executable(name: "Kestra", targets: ["Kestra"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6")
+    ],
     targets: [
         .executableTarget(
             name: "Kestra",
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             path: "Sources/Kestra",
             resources: [
                 .process("Resources")

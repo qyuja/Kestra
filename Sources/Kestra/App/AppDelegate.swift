@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let providerSelection = AIProviderSelectionStore()
     private let completionAnimationRegistry = CompletionAnimationRegistry()
     let animationSettings = CompletionAnimationSettingsStore()
+    let updater = KestraUpdater()
 
     private(set) var isIslandVisible = false
 
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // This is intentionally an accessory-only app. The status item popover
         // owns the task list, provider selection, settings, and actions.
         NSApp.setActivationPolicy(.accessory)
+        updater.start()
 
         let taskBridgeStore = taskBridgeStore
         Task {
@@ -68,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             store: taskStore,
             providerSelection: providerSelection,
             previewSettings: previewSettings,
+            updater: updater,
             onOpenTask: { task in
                 ApplicationLauncher.openCodexTask(task)
             },

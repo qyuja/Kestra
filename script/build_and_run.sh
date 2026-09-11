@@ -7,7 +7,11 @@ BUNDLE_ID="com.kiannest.kestra"
 MIN_SYSTEM_VERSION="26.0"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 APP_VERSION="${APP_VERSION:-1.0}"
+APP_BUILD_VERSION="${APP_BUILD_VERSION:-1}"
 SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
+SPARKLE_ENABLED="${SPARKLE_ENABLED:-false}"
+SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/qyuja/Kestra/releases/latest/download/appcast.xml}"
+SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-YRRedh8vMkmanf6BJCLs0dLIYjc1fM6gieABQn/FSbY=}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -15,6 +19,7 @@ APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
+APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
@@ -26,10 +31,33 @@ BUILD_BINARY="$BUILD_BIN_DIR/$APP_NAME"
 BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${APP_NAME}_${APP_NAME}.bundle"
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_MACOS" "$APP_RESOURCES"
+mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_FRAMEWORKS"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 cp -R "$BUILD_RESOURCE_BUNDLE" "$APP_RESOURCES/"
+ditto "$BUILD_BIN_DIR/Sparkle.framework" "$APP_FRAMEWORKS/Sparkle.framework"
+install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_BINARY"
+
+SPARKLE_PLIST=""
+if [[ "$SPARKLE_ENABLED" == "true" ]]; then
+  SPARKLE_PLIST=$(cat <<PLIST
+  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_ED_KEY</string>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUAutomaticallyUpdate</key>
+  <false/>
+  <key>SUVerifyUpdateBeforeExtraction</key>
+  <true/>
+  <key>SURequireSignedFeed</key>
+  <true/>
+  <key>SUScheduledCheckInterval</key>
+  <integer>86400</integer>
+PLIST
+)
+fi
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -47,7 +75,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleShortVersionString</key>
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
-  <string>1</string>
+  <string>$APP_BUILD_VERSION</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
@@ -58,6 +86,7 @@ cat >"$INFO_PLIST" <<PLIST
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+$SPARKLE_PLIST
 </dict>
 </plist>
 PLIST

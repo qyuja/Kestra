@@ -21,6 +21,7 @@ struct StatusPopoverView: View {
     @ObservedObject var squatRunner: SquatRunner
     @ObservedObject var providerSelection: AIProviderSelectionStore
     @ObservedObject var previewSettings: CodexTaskPreviewSettingsStore
+    @ObservedObject var updater: KestraUpdater
     let animationPlugins: CompletionAnimationRegistry
     @ObservedObject var animationSettings: CompletionAnimationSettingsStore
     let onPreviewAnimation: (CompletionPreviewRequest?) -> Void
@@ -418,6 +419,7 @@ struct StatusPopoverView: View {
                 displayPositionSection
                 completionAnimationSection
                 timingSection
+                updateSection
 
                 if let lastError = store.lastError {
                     Label(lastError, systemImage: "exclamationmark.triangle")
@@ -871,6 +873,38 @@ struct StatusPopoverView: View {
                 .toggleStyle(.switch)
             }
             .frame(height: 30)
+        }
+    }
+
+    private var updateSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingsGroupTitle("更新")
+
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("自动更新")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(StatusPopoverStyle.primaryText)
+                    Text(updater.isConfigured ? "后台自动检查，安装前会确认" : "当前构建未配置更新源")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(StatusPopoverStyle.secondaryText)
+                }
+
+                Spacer(minLength: 8)
+
+                Button("检查更新") {
+                    updater.checkForUpdates()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!updater.canCheckForUpdates)
+            }
+            .padding(10)
+            .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
         }
     }
 
