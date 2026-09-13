@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" role="img" aria-labelledby="title desc">
+  <title id="title">Kestra logo</title>
+  <desc id="desc">A geometric K with an active signal dot, representing a task radar for AI coding agents.</desc>
+  <g transform="translate(24 24)">
+    <rect width="372" height="372" rx="108" fill="#111318"/>
+    <path d="M112 102V318M116 210L276 102M116 210L276 318" fill="none" stroke="#40E07A" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="292" cy="92" r="24" fill="#40E07A"/>
+  </g>
+  <text x="480" y="276" fill="#111318" font-family="'Helvetica Neue', Arial, sans-serif" font-size="176" font-weight="700" letter-spacing="-5">Kestra</text>
+</svg>

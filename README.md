@@ -1,5 +1,7 @@
 # Kestra
 
+![Kestra logo](kestra-logo/logo.png)
+
 Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达：在后台监听本地 agent 客户端，把运行中任务数、任务摘要和完成提醒放到一个随时可见的状态栏入口里。
 
 ## 功能

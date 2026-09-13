@@ -27,15 +27,44 @@ enum AIProviderLogoCatalog {
     }
 }
 
+@MainActor
 struct AppBrandIcon: View {
+    private static var cachedLogo: NSImage?
+
     var size: CGFloat = 14
     var weight: Font.Weight = .semibold
 
     var body: some View {
-        Image(systemName: "sparkles")
-            .font(.system(size: size, weight: weight))
-            .symbolRenderingMode(.hierarchical)
-            .accessibilityLabel("Kestra")
+        Group {
+            if let logo = logoImage {
+                Image(nsImage: logo)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+            } else {
+                Image(systemName: "sparkles")
+                    .font(.system(size: size, weight: weight))
+                    .symbolRenderingMode(.hierarchical)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Kestra")
+    }
+
+    private var logoImage: NSImage? {
+        if let cachedLogo = Self.cachedLogo {
+            return cachedLogo
+        }
+
+        guard let resourceURL = KestraResourceBundle.bundle.url(
+            forResource: "kestra-logo-icon",
+            withExtension: "png"
+        ), let image = NSImage(contentsOf: resourceURL) else {
+            return nil
+        }
+
+        Self.cachedLogo = image
+        return image
     }
 }
 

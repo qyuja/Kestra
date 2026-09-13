@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Kestra icon</title>
+  <desc id="desc">A geometric K with an active signal dot, representing a task radar for AI coding agents.</desc>
+  <rect x="16" y="16" width="224" height="224" rx="66" fill="#111318"/>
+  <path d="M70 72V204M72 138L170 72M72 138L170 204" fill="none" stroke="#40E07A" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="188" cy="66" r="16" fill="#40E07A"/>
+</svg>

@@ -109,14 +109,7 @@ struct StatusPopoverView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.green.opacity(0.15))
-                    .frame(width: 32, height: 32)
-
-                AppBrandIcon(size: 14, weight: .bold)
-                    .foregroundStyle(.green)
-            }
+            AppBrandIcon(size: 32, weight: .bold)
 
             Text("Kestra")
                 .font(.system(size: 15, weight: .semibold))

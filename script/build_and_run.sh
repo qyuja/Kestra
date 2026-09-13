@@ -29,12 +29,15 @@ swift build --configuration "$BUILD_CONFIGURATION"
 BUILD_BIN_DIR="$(swift build --configuration "$BUILD_CONFIGURATION" --show-bin-path)"
 BUILD_BINARY="$BUILD_BIN_DIR/$APP_NAME"
 BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${APP_NAME}_${APP_NAME}.bundle"
+BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/Kestra.icns"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES" "$APP_FRAMEWORKS"
 cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 cp -R "$BUILD_RESOURCE_BUNDLE" "$APP_RESOURCES/"
+test -f "$BUILD_APP_ICON"
+cp "$BUILD_APP_ICON" "$APP_RESOURCES/Kestra.icns"
 ditto "$BUILD_BIN_DIR/Sparkle.framework" "$APP_FRAMEWORKS/Sparkle.framework"
 install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_BINARY"
 
@@ -86,6 +89,8 @@ cat >"$INFO_PLIST" <<PLIST
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>CFBundleIconFile</key>
+  <string>Kestra.icns</string>
 $SPARKLE_PLIST
 </dict>
 </plist>
