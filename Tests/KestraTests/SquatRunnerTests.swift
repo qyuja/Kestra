@@ -29,12 +29,16 @@ final class SquatRunnerTests: XCTestCase {
         }
 
         let runner = SquatRunner(defaults: defaults, pluginsDirectory: pluginsDirectory)
-        XCTAssertEqual(runner.options.map(\.id), ["barbell-squat", "sparkles"])
+        XCTAssertEqual(runner.options.map(\.id), ["barbell-squat", "kestra-logo", "sparkles"])
         XCTAssertEqual(runner.selectedIconID, "barbell-squat")
+
+        runner.selectIcon("kestra-logo")
+        XCTAssertNotNil(runner.image)
+        runner.update(runningCount: 3)
+        XCTAssertEqual(runner.total, 0)
 
         runner.selectIcon("sparkles")
         XCTAssertNotNil(runner.image)
-        runner.update(runningCount: 3)
         XCTAssertEqual(runner.total, 0)
     }
 

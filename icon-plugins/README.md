@@ -21,7 +21,8 @@ uses either PNG frames or a macOS system symbol:
 The supported fields are `schemaVersion`, `id`, `name`, optional `frames`
 (relative PNG paths), optional `systemSymbol`, optional `idleFrame`, and
 optional `cycleDuration` in seconds. `frames` and `systemSymbol` are mutually
-exclusive. The built-in IDs `barbell-squat` and `sparkles` cannot be replaced.
+exclusive. The built-in IDs `barbell-squat`, `kestra-logo`, and `sparkles` cannot
+be replaced.
 
 Installation and refresh
 

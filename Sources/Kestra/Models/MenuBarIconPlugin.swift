@@ -46,6 +46,7 @@ enum MenuBarIconPluginLimits {
 
 enum MenuBarIconPluginCatalog {
     static let squatID = "barbell-squat"
+    static let kestraLogoID = "kestra-logo"
     static let sparklesID = "sparkles"
 
     static func builtIns() -> (plugins: [MenuBarIconPlugin], errors: [String]) {
@@ -72,6 +73,24 @@ enum MenuBarIconPluginCatalog {
             )
         } else {
             errors.append("内置深蹲图标资源不完整")
+        }
+
+        if let logoURL = KestraResourceBundle.bundle.url(
+            forResource: "kestra-logo-icon",
+            withExtension: "png"
+        ), let logoImage = NSImage(contentsOf: logoURL) {
+            plugins.append(
+                MenuBarIconPlugin(
+                    option: MenuBarIconOption(id: kestraLogoID, name: "Kestra Logo"),
+                    frames: [logoImage],
+                    systemSymbolName: nil,
+                    idleFrame: 0,
+                    cycleDuration: 1.2,
+                    countsTowardSquat: false
+                )
+            )
+        } else {
+            errors.append("内置 Kestra Logo 资源不可用")
         }
 
         if NSImage(systemSymbolName: "sparkles", accessibilityDescription: "星芒") != nil {

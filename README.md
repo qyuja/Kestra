@@ -11,7 +11,7 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 - 支持客户端 tab、任务展开收起、运行时长和完成时间展示。
 - 任务完成后从屏幕指定位置弹出可点击的完成提醒，支持边、角和中心位置，以及独立的 In / Out 动画、速度和停留时长设置。
 - 账号管理和手动切换目前面向 Codex / ChatGPT 与 Claude Code；切换前会阻止仍有运行任务的账号操作。
-- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码。
+- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项包含深蹲 runner、Kestra Logo 和星芒。
 
 ## 已接入的任务来源
 
