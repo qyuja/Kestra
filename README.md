@@ -36,6 +36,12 @@ swift test
 ./script/build_and_run.sh
 ```
 
+直接运行脚本会构建并打开隔离的 `dist/KestraDev.app`，不会关闭或复用已安装的 `/Applications/Kestra.app`。需要生成 production-shaped bundle 但不启动应用时使用：
+
+```bash
+./script/build_and_run.sh package
+```
+
 构建并做进程检查：
 
 ```bash
@@ -68,7 +74,7 @@ Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeepe
 
 自动更新发布还需要配置 `SPARKLE_ED25519_PRIVATE_KEY` Secret。它只用于 GitHub Actions 给更新 archive 和 appcast 签名，不能提交到仓库。没有这个 Secret 时，Actions 仍会发布 DMG，但不会把该版本作为应用内自动更新源发布。
 
-应用是状态栏应用，不创建常规控制窗口。运行脚本会在 `dist/Kestra.app` 生成经过完整 bundle 校验的本地调试包；没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
+应用是状态栏应用，不创建常规控制窗口。`run` 模式使用独立的 `KestraDev` 进程和数据目录；`package` 模式在 `dist/Kestra.app` 生成经过完整 bundle 校验的包，不会终止正在运行的应用。没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
 
 如果下载后 macOS 提示无法验证开发者或应用不安全，请先确认 DMG 来源可信，将 `Kestra.app` 拖入“应用程序”，再执行（命令是 `xattr`，不是 `xttr`）：
 

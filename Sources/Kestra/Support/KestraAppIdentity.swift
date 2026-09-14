@@ -2,10 +2,20 @@ import Foundation
 
 enum KestraAppIdentity {
     static let name = "Kestra"
-    static let bundleIdentifier = "com.kiannest.kestra"
+    private static let productionBundleIdentifier = "com.kiannest.kestra"
+    private static let developmentBundleIdentifier = "com.kiannest.kestra.dev"
+    static let bundleIdentifier: String = {
+        Bundle.main.bundleIdentifier == developmentBundleIdentifier
+            ? developmentBundleIdentifier
+            : productionBundleIdentifier
+    }()
 
     // Kept only so an upgrade can find data created by the pre-Kestra build.
-    static let legacyBundleIdentifier = "com.kiannest.islandbar"
+    static let legacyBundleIdentifier: String = {
+        bundleIdentifier == developmentBundleIdentifier
+            ? "com.kiannest.islandbar.dev"
+            : "com.kiannest.islandbar"
+    }()
 
     static var applicationSupportDirectory: URL {
         applicationSupportDirectory(for: bundleIdentifier)

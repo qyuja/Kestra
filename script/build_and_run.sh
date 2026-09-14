@@ -2,8 +2,7 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-APP_NAME="Kestra"
-BUNDLE_ID="com.kiannest.kestra"
+BUILD_PRODUCT_NAME="Kestra"
 MIN_SYSTEM_VERSION="26.0"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 APP_VERSION="${APP_VERSION:-1.0}"
@@ -12,6 +11,23 @@ SIGNING_IDENTITY="${SIGNING_IDENTITY:--}"
 SPARKLE_ENABLED="${SPARKLE_ENABLED:-false}"
 SPARKLE_FEED_URL="${SPARKLE_FEED_URL:-https://github.com/qyuja/Kestra/releases/latest/download/appcast.xml}"
 SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-YRRedh8vMkmanf6BJCLs0dLIYjc1fM6gieABQn/FSbY=}"
+
+IS_DEVELOPMENT_APP=false
+case "$MODE" in
+  run|--debug|debug|--logs|logs|--telemetry|telemetry|--verify|verify)
+    IS_DEVELOPMENT_APP=true
+    ;;
+esac
+
+if [[ "$IS_DEVELOPMENT_APP" == true ]]; then
+  APP_NAME="KestraDev"
+  DISPLAY_NAME="Kestra Dev"
+  BUNDLE_ID="com.kiannest.kestra.dev"
+else
+  APP_NAME="Kestra"
+  DISPLAY_NAME="Kestra"
+  BUNDLE_ID="com.kiannest.kestra"
+fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -23,12 +39,16 @@ APP_FRAMEWORKS="$APP_CONTENTS/Frameworks"
 APP_BINARY="$APP_MACOS/$APP_NAME"
 INFO_PLIST="$APP_CONTENTS/Info.plist"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+# Only restart the isolated development instance. Packaging and release
+# validation must never terminate the installed production app.
+if [[ "$IS_DEVELOPMENT_APP" == true ]]; then
+  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+fi
 
 swift build --configuration "$BUILD_CONFIGURATION"
 BUILD_BIN_DIR="$(swift build --configuration "$BUILD_CONFIGURATION" --show-bin-path)"
-BUILD_BINARY="$BUILD_BIN_DIR/$APP_NAME"
-BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${APP_NAME}_${APP_NAME}.bundle"
+BUILD_BINARY="$BUILD_BIN_DIR/$BUILD_PRODUCT_NAME"
+BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${BUILD_PRODUCT_NAME}_${BUILD_PRODUCT_NAME}.bundle"
 BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/Kestra.icns"
 
 rm -rf "$APP_BUNDLE"
@@ -72,9 +92,9 @@ cat >"$INFO_PLIST" <<PLIST
   <key>CFBundleIdentifier</key>
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
-  <string>Kestra</string>
+  <string>$DISPLAY_NAME</string>
   <key>CFBundleDisplayName</key>
-  <string>Kestra</string>
+  <string>$DISPLAY_NAME</string>
   <key>CFBundleShortVersionString</key>
   <string>$APP_VERSION</string>
   <key>CFBundleVersion</key>
