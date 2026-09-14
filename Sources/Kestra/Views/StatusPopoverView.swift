@@ -22,6 +22,7 @@ struct StatusPopoverView: View {
     @ObservedObject var providerSelection: AIProviderSelectionStore
     @ObservedObject var previewSettings: CodexTaskPreviewSettingsStore
     @ObservedObject var updater: KestraUpdater
+    @ObservedObject var launchAtLogin: KestraLaunchAtLogin
     let animationPlugins: CompletionAnimationRegistry
     @ObservedObject var animationSettings: CompletionAnimationSettingsStore
     let onPreviewAnimation: (CompletionPreviewRequest?) -> Void
@@ -412,6 +413,7 @@ struct StatusPopoverView: View {
                 displayPositionSection
                 completionAnimationSection
                 timingSection
+                launchAtLoginSection
                 updateSection
 
                 if let lastError = store.lastError {
@@ -898,6 +900,48 @@ struct StatusPopoverView: View {
             }
             .padding(10)
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var launchAtLoginSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingsGroupTitle("启动")
+
+            HStack(spacing: 10) {
+                Image(systemName: "power.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("开机自启动")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(StatusPopoverStyle.primaryText)
+                    Text(launchAtLogin.statusMessage ?? "登录 macOS 后自动运行 Kestra")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(
+                            launchAtLogin.statusMessage == nil
+                                ? StatusPopoverStyle.secondaryText
+                                : .orange
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.setEnabled($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .disabled(!launchAtLogin.isAvailable)
+            }
+            .padding(10)
+            .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+            .onAppear { launchAtLogin.refresh() }
         }
     }
 

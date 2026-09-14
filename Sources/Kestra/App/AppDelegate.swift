@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let completionAnimationRegistry = CompletionAnimationRegistry()
     let animationSettings = CompletionAnimationSettingsStore()
     let updater = KestraUpdater()
+    let launchAtLogin = KestraLaunchAtLogin()
 
     private(set) var isIslandVisible = false
 
@@ -71,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             providerSelection: providerSelection,
             previewSettings: previewSettings,
             updater: updater,
+            launchAtLogin: launchAtLogin,
             onOpenTask: { task in
                 ApplicationLauncher.openCodexTask(task)
             },
