@@ -10,6 +10,7 @@ final class IslandStatusItemController: NSObject {
     private let previewSettings: CodexTaskPreviewSettingsStore
     private let updater: KestraUpdater
     private let launchAtLogin: KestraLaunchAtLogin
+    private let limitRefreshSettings: CodexLimitRefreshSettingsStore
     private let onOpenTask: (CodexTask) -> Void
     private let onOpenCodex: () -> Void
     private let onOpenClaude: () -> Void
@@ -36,6 +37,7 @@ final class IslandStatusItemController: NSObject {
         previewSettings: CodexTaskPreviewSettingsStore,
         updater: KestraUpdater,
         launchAtLogin: KestraLaunchAtLogin,
+        limitRefreshSettings: CodexLimitRefreshSettingsStore,
         onOpenTask: @escaping (CodexTask) -> Void,
         onOpenCodex: @escaping () -> Void,
         onOpenClaude: @escaping () -> Void,
@@ -48,6 +50,7 @@ final class IslandStatusItemController: NSObject {
         self.previewSettings = previewSettings
         self.updater = updater
         self.launchAtLogin = launchAtLogin
+        self.limitRefreshSettings = limitRefreshSettings
         self.onOpenTask = onOpenTask
         self.onOpenCodex = onOpenCodex
         self.onOpenClaude = onOpenClaude
@@ -240,6 +243,7 @@ final class IslandStatusItemController: NSObject {
                     previewSettings: previewSettings,
                     updater: updater,
                     launchAtLogin: launchAtLogin,
+                    limitRefreshSettings: limitRefreshSettings,
                     animationPlugins: animationPlugins,
                     animationSettings: animationSettings,
                     onPreviewAnimation: { [weak self] identifier in

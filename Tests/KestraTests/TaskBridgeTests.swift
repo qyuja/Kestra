@@ -107,6 +107,18 @@ final class TaskBridgeTests: XCTestCase {
         XCTAssertEqual(reversed.displayWindows.compactMap(\.minutes), [300, 10080])
     }
 
+    func testUsageParsesResetTimestampFromJSONNumber() {
+        let usage = CodexAccountUsage.parse(["rateLimits": [
+            "primary": [
+                "usedPercent": 20,
+                "windowDurationMins": 300,
+                "resetsAt": NSNumber(value: 1_700_000_000)
+            ]
+        ]])
+
+        XCTAssertEqual(usage.primary?.resetsAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
     func testSwitchRequiresExpectedWorkspaceAndEmail() {
         let profile = CodexAccountProfile(
             id: "test", displayName: "A", codexHomePath: URL(fileURLWithPath: "/tmp/example"),

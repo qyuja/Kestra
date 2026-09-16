@@ -69,7 +69,11 @@ struct CodexCredentialSwap {
     }
 
     private static func writeSecret(_ data: Data, to url: URL) throws {
-        try data.write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
+        // NSFileProtection is an iOS data-protection attribute. On current
+        // macOS it can make files written under temporary/test locations
+        // unreadable; restrictive POSIX permissions provide the macOS
+        // boundary we need here.
+        try data.write(to: url, options: [.atomic])
         try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 

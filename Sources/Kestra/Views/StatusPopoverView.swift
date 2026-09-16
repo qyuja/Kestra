@@ -23,6 +23,7 @@ struct StatusPopoverView: View {
     @ObservedObject var previewSettings: CodexTaskPreviewSettingsStore
     @ObservedObject var updater: KestraUpdater
     @ObservedObject var launchAtLogin: KestraLaunchAtLogin
+    @ObservedObject var limitRefreshSettings: CodexLimitRefreshSettingsStore
     let animationPlugins: CompletionAnimationRegistry
     @ObservedObject var animationSettings: CompletionAnimationSettingsStore
     let onPreviewAnimation: (CompletionPreviewRequest?) -> Void
@@ -413,6 +414,7 @@ struct StatusPopoverView: View {
                 displayPositionSection
                 completionAnimationSection
                 timingSection
+                limitRefreshSection
                 launchAtLoginSection
                 updateSection
 
@@ -900,6 +902,43 @@ struct StatusPopoverView: View {
             }
             .padding(10)
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private var limitRefreshSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingsGroupTitle("额度唤醒")
+
+            HStack(spacing: 10) {
+                Image(systemName: "arrow.clockwise.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("限额重置后发送问候")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(StatusPopoverStyle.primaryText)
+                    Text("检测到 Codex 额度窗口重置后，发送一次真实问候请求")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(StatusPopoverStyle.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Toggle(
+                    "",
+                    isOn: Binding(
+                        get: { limitRefreshSettings.isEnabled },
+                        set: { limitRefreshSettings.setEnabled($0) }
+                    )
+                )
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+            .padding(10)
+            .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+            .help("仅在没有运行中任务时，通过 Codex app-server 创建临时线程并发送：你好。请只回复一句简短的问候，不要执行任何操作。请求可能消耗额度。")
         }
     }
 

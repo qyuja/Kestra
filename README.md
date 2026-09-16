@@ -11,6 +11,7 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 - 支持客户端 tab、任务展开收起、运行时长和完成时间展示。
 - 任务完成后从屏幕指定位置弹出可点击的完成提醒，支持边、角和中心位置，以及独立的 In / Out 动画、速度和停留时长设置。
 - 账号管理和手动切换目前面向 Codex / ChatGPT 与 Claude Code；切换前会阻止仍有运行任务的账号操作。
+- Codex 额度按 30 秒在后台轮询；可选在检测到额度窗口重置后，发送一次“只打招呼、不执行操作”的临时问候来尽早刷新额度状态。
 - 设置中支持使用 macOS 原生登录项注册开机自启动。
 - 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项包含深蹲 runner、Kestra Logo 和星芒。
 
@@ -22,7 +23,7 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 - Claude Code：通过 CLI Hooks 读取任务，并提供账号登记、重登和手动切换。
 - Cursor、Pi、OpenCode、Gemini CLI、Qwen Code、Grok Build、WorkBuddy：通过各自的本地 Hook / 插件协议接入；其中部分仍属于实验性适配，真实客户端版本和模式需要单独验证。
 
-这里只监听 coding/work agent 的任务，不把普通网站聊天或纯聊天模型本身当作任务来源。模型和 effort 是任务属性，额度监控不在当前范围内。
+这里只监听 coding/work agent 的任务，不把普通网站聊天或纯聊天模型本身当作任务来源。模型和 effort 是任务属性。
 
 ## 构建和运行
 
@@ -111,11 +112,13 @@ open /Applications/Kestra.app
 - 账号切换只保存必要的本地账号元数据；凭据保存在客户端文件或 macOS 钥匙串中，不写入任务列表、README、日志或 Git 仓库。
 - 应用数据默认位于 `~/Library/Application Support/com.kiannest.kestra/`；Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
 - 应用不会扫描或上传完整历史；任务预览只读取界面需要的截断内容。
+- 额度唤醒只处理本地 Codex app-server 返回的额度快照。开启后，在检测到重置且没有运行中任务时，会向对应账号发送一次真实问候请求；该请求可能消耗额度，临时线程不会写入持久会话。
 
 ## 当前限制
 
 - 默认发布链路仍允许 ad-hoc 签名；没有 Developer ID 和 notarization 时，DMG 和自动更新包可以做结构验证，但其他 Mac 可能仍需要右键打开或移除 quarantine。
 - 自动更新依赖 GitHub Release 的 `appcast.xml` 和 Sparkle Ed25519 签名；发布前必须配置 `SPARKLE_ED25519_PRIVATE_KEY`，并建议同时配置 Developer ID/notarization。
+- 额度重置检测需要 Codex 返回稳定的 `resetsAt` 和明显恢复的剩余额度；数据缺失或无法确认重置时不会发送。当前只有 Codex app-server 接入了这条额度唤醒链路，其他客户端暂未提供同等协议。
 - 各客户端 Hook / 插件协议会随客户端版本变化；协议单元测试不等于真实客户端端到端验证。
 - 客户端被强制结束且没有产生结束事件时，Kestra 无法凭本地协议准确推断任务已结束。
 - Claude Code 的真实账号切换尚未完成双账号端到端验收；不应把隔离测试当成真实登录验证。
@@ -125,6 +128,7 @@ open /Applications/Kestra.app
 
 - [账号与任务交接](docs/account-task-bridge.md)
 - [Claude Code 账号](docs/claude-code-accounts.md)
+- [Codex 额度唤醒](docs/limit-refresh.md)
 - [图标插件](icon-plugins/README.md)
 - [开源准备检查](docs/open-source-readiness.md)
 

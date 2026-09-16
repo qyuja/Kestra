@@ -33,7 +33,9 @@ struct CodexAccountUsage: Sendable {
             return Window(
                 remainingPercent: max(0, min(100, 100 - used)),
                 minutes: raw["windowDurationMins"] as? Int,
-                resetsAt: (raw["resetsAt"] as? Double).map(Date.init(timeIntervalSince1970:))
+                resetsAt: (raw["resetsAt"] as? NSNumber).map {
+                    Date(timeIntervalSince1970: $0.doubleValue)
+                }
             )
         }
         return Self(accountID: response["accountId"] as? String, primary: window("primary"), secondary: window("secondary"))

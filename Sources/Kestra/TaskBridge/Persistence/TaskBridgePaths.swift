@@ -13,6 +13,7 @@ struct TaskBridgePaths: Sendable {
     }
 
     var accountsFile: URL { root.appendingPathComponent("accounts.json") }
+    var limitRefreshFile: URL { root.appendingPathComponent("limit-refresh.json") }
     var tasksDirectory: URL { root.appendingPathComponent("tasks", isDirectory: true) }
     var messagesDirectory: URL { root.appendingPathComponent("messages", isDirectory: true) }
     var leasesDirectory: URL { root.appendingPathComponent("leases", isDirectory: true) }

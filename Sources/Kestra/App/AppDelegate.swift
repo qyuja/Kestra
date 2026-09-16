@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let providerSelection = AIProviderSelectionStore()
     private let completionAnimationRegistry = CompletionAnimationRegistry()
     let animationSettings = CompletionAnimationSettingsStore()
+    let limitRefreshSettings = CodexLimitRefreshSettingsStore()
     let updater = KestraUpdater()
     let launchAtLogin = KestraLaunchAtLogin()
 
@@ -18,7 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var completionPanelController: CodexCompletionPanelController?
 
     override init() {
-        taskStore = CodexTaskStore(previewSettings: previewSettings)
+        taskStore = CodexTaskStore(
+            previewSettings: previewSettings,
+            limitRefreshSettings: limitRefreshSettings
+        )
         super.init()
     }
 
@@ -73,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             previewSettings: previewSettings,
             updater: updater,
             launchAtLogin: launchAtLogin,
+            limitRefreshSettings: limitRefreshSettings,
             onOpenTask: { task in
                 ApplicationLauncher.openCodexTask(task)
             },

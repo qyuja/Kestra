@@ -115,6 +115,8 @@ final class CodexTaskStore: ObservableObject {
     @Published private(set) var currentAccountID: String?
     @Published private(set) var accountQuotas: [String: CodexAccountQuotaState] = [:]
     private let accountUsageMonitor = CodexAccountUsageMonitor()
+    private let limitRefreshSettings: CodexLimitRefreshSettingsStore
+    private let limitRefreshController: CodexLimitRefreshController
     @Published private(set) var isAddingAccount = false
     @Published private(set) var switchingAccountID: String?
     private let accountLogin = CodexAccountLogin()
@@ -433,10 +435,23 @@ final class CodexTaskStore: ObservableObject {
     private let activeStatePollingInterval: TimeInterval = 0.5
     private let metadataPollingInterval: TimeInterval = 2.0
 
-    init(previewSettings: CodexTaskPreviewSettingsStore) {
+    init(
+        previewSettings: CodexTaskPreviewSettingsStore,
+        limitRefreshSettings: CodexLimitRefreshSettingsStore
+    ) {
         self.previewSettings = previewSettings
+        self.limitRefreshSettings = limitRefreshSettings
+        self.limitRefreshController = CodexLimitRefreshController(settings: limitRefreshSettings)
         appServerClient = CodexAppServerClient()
-        accountUsageMonitor.onUpdate = { [weak self] states in self?.accountQuotas = states }
+        accountUsageMonitor.onUpdate = { [weak self] states in
+            guard let self else { return }
+            self.accountQuotas = states
+            self.limitRefreshController.observe(
+                profiles: self.accountProfiles,
+                states: states,
+                hasRunningTasks: self.tasks.contains(where: \.isRunning)
+            )
+        }
 
         appServerClient.onConnectionChanged = { [weak self] connected in
             self?.isConnected = connected
@@ -496,6 +511,7 @@ final class CodexTaskStore: ObservableObject {
         latestMessageRequestID += 1
         isReadingLatestMessages = false
         monitoredRecords.removeAll(keepingCapacity: false)
+        limitRefreshController.stop()
         appServerClient.stop()
     }
 
@@ -723,6 +739,7 @@ final class CodexTaskStore: ObservableObject {
         if tasks != nextTasks {
             tasks = nextTasks
         }
+        limitRefreshController.updateRunningTaskState(nextTasks.contains(where: \.isRunning))
     }
 
     private func emitPendingCompletionsIfPossible() {

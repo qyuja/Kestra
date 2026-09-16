@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class CodexAppServerClient {
     typealias ThreadListCompletion = @MainActor (Result<[CodexThreadRecord], Error>) -> Void
+    typealias GreetingCompletion = @MainActor (Result<Void, Error>) -> Void
 
     private enum PendingRequest {
         case initialize
@@ -10,6 +11,9 @@ final class CodexAppServerClient {
         case account
         case accountLimits
         case login
+        case greetingMCPServerStatus
+        case greetingThreadStart
+        case greetingTurnStart
     }
 
     private let fileManager = FileManager.default
@@ -28,7 +32,30 @@ final class CodexAppServerClient {
     var onInitialized: (() -> Void)?
     var onLoginURL: ((URL) -> Void)?
     var onLoginCompleted: ((Bool, String?) -> Void)?
+    var canContinueGreeting: (() -> Bool)?
     private var loginID: String?
+    private var greetingCompletion: GreetingCompletion?
+    private var greetingTimeout: Task<Void, Never>?
+    private var pendingGreetingMessage: String?
+    private var greetingThreadID: String?
+    private var greetingTurnID: String?
+    private var greetingWorkingDirectory: URL?
+    private var greetingMCPServerNames = [String]()
+    private var greetingMCPServerCursor: String?
+
+    private static let greetingInstructions = "这是一次自动额度唤醒请求。不要调用任何工具，不要读取或修改文件，不要访问网络，也不要执行任何操作，只回复一句简短问候。"
+
+    private var greetingConfig: [String: Any] {
+        var disabledServers: [String: Any] = [:]
+        for name in greetingMCPServerNames where !name.isEmpty {
+            disabledServers[name] = ["enabled": false]
+        }
+
+        return [
+            "features": ["plugins": false],
+            "mcp_servers": disabledServers
+        ]
+    }
 
     static var defaultCodexHome: URL {
         ProcessInfo.processInfo.environment["CODEX_HOME"].flatMap {
@@ -65,6 +92,198 @@ final class CodexAppServerClient {
             self?.finishAccountFailure(CodexAppServerError.server("读取账号或额度超时，请重试"))
         }
         if isInitialized { sendAccountRequest() }
+    }
+
+    /// Sends one isolated greeting through the app-server. The completion is
+    /// delivered only after the corresponding `turn/completed` notification.
+    func sendGreeting(
+        message: String,
+        completion: @escaping GreetingCompletion
+    ) {
+        guard isRunning else {
+            completion(.failure(CodexAppServerError.notRunning))
+            return
+        }
+        guard greetingCompletion == nil else {
+            completion(.failure(CodexAppServerError.server("正在发送问候，请稍后重试")))
+            return
+        }
+        guard let workingDirectory = createGreetingWorkingDirectory() else {
+            completion(.failure(CodexAppServerError.server("无法创建问候临时目录")))
+            return
+        }
+
+        greetingCompletion = completion
+        greetingWorkingDirectory = workingDirectory
+        greetingMCPServerNames.removeAll(keepingCapacity: true)
+        greetingMCPServerCursor = nil
+        pendingGreetingMessage = message
+        greetingTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            self?.finishGreeting(.failure(CodexAppServerError.server("发送问候超时")))
+        }
+        if isInitialized {
+            beginGreetingMCPServerStatus()
+        }
+    }
+
+    private func beginGreeting() {
+        guard isInitialized, greetingCompletion != nil,
+              greetingThreadID == nil, greetingTurnID == nil else { return }
+        guard pendingGreetingMessage != nil else {
+            finishGreeting(.failure(CodexAppServerError.server("问候消息未准备好")))
+            return
+        }
+        guard let workingDirectory = greetingWorkingDirectory else {
+            finishGreeting(.failure(CodexAppServerError.server("问候临时目录未准备好")))
+            return
+        }
+        let requestID = allocateRequestID()
+        pendingRequests[requestID] = .greetingThreadStart
+        send([
+            "jsonrpc": "2.0",
+            "id": requestID,
+            "method": "thread/start",
+            "params": [
+                "ephemeral": true,
+                "approvalPolicy": "never",
+                "sandbox": "read-only",
+                "cwd": workingDirectory.path,
+                "baseInstructions": Self.greetingInstructions,
+                "developerInstructions": Self.greetingInstructions,
+                "config": greetingConfig
+            ]
+        ])
+    }
+
+    private func beginGreetingTurn(threadID: String) {
+        guard let message = pendingGreetingMessage else {
+            finishGreeting(.failure(CodexAppServerError.server("问候线程未准备好")))
+            return
+        }
+        guard let workingDirectory = greetingWorkingDirectory else {
+            finishGreeting(.failure(CodexAppServerError.server("问候临时目录未准备好")))
+            return
+        }
+        guard canContinueGreeting?() ?? true else {
+            finishGreeting(.failure(CodexAppServerError.server("检测到运行中任务，问候已暂存")))
+            return
+        }
+
+        greetingThreadID = threadID
+        let requestID = allocateRequestID()
+        pendingRequests[requestID] = .greetingTurnStart
+        send([
+            "jsonrpc": "2.0",
+            "id": requestID,
+            "method": "turn/start",
+            "params": [
+                "threadId": threadID,
+                "input": [
+                    [
+                        "type": "text",
+                        "text": message
+                    ]
+                ],
+                "approvalPolicy": "never",
+                "cwd": workingDirectory.path,
+                "sandboxPolicy": [
+                    "type": "readOnly",
+                    "networkAccess": false
+                ]
+            ]
+        ])
+    }
+
+    private func finishGreeting(_ result: Result<Void, Error>) {
+        greetingTimeout?.cancel()
+        greetingTimeout = nil
+        pendingGreetingMessage = nil
+        greetingThreadID = nil
+        greetingTurnID = nil
+        greetingMCPServerNames.removeAll(keepingCapacity: false)
+        greetingMCPServerCursor = nil
+        if let greetingWorkingDirectory {
+            try? fileManager.removeItem(at: greetingWorkingDirectory)
+        }
+        greetingWorkingDirectory = nil
+        pendingRequests = pendingRequests.filter {
+            switch $0.value {
+            case .greetingMCPServerStatus, .greetingThreadStart, .greetingTurnStart:
+                return false
+            default:
+                return true
+            }
+        }
+        let completion = greetingCompletion
+        greetingCompletion = nil
+        completion?(result)
+    }
+
+    /// Resolve the configured MCP servers before starting the isolated thread.
+    /// Passing every server back as `enabled: false` prevents a user's normal
+    /// MCP configuration from becoming an implicit side effect of this request.
+    private func beginGreetingMCPServerStatus() {
+        guard isInitialized, greetingCompletion != nil,
+              greetingThreadID == nil, greetingTurnID == nil else { return }
+        guard !pendingRequests.values.contains(where: {
+            if case .greetingMCPServerStatus = $0 { return true }
+            return false
+        }) else { return }
+
+        var params: [String: Any] = [
+            "detail": "toolsAndAuthOnly",
+            "limit": 100
+        ]
+        if let cursor = greetingMCPServerCursor, !cursor.isEmpty {
+            params["cursor"] = cursor
+        }
+
+        let requestID = allocateRequestID()
+        pendingRequests[requestID] = .greetingMCPServerStatus
+        send([
+            "jsonrpc": "2.0",
+            "id": requestID,
+            "method": "mcpServerStatus/list",
+            "params": params
+        ])
+    }
+
+    private func handleGreetingMCPServerStatus(_ result: [String: Any]) {
+        guard let rawServers = result["data"] as? [[String: Any]] else {
+            finishGreeting(.failure(CodexAppServerError.invalidResponse))
+            return
+        }
+
+        for rawServer in rawServers {
+            guard let name = rawServer["name"] as? String, !name.isEmpty,
+                  !greetingMCPServerNames.contains(name) else { continue }
+            greetingMCPServerNames.append(name)
+        }
+
+        if let nextCursor = result["nextCursor"] as? String, !nextCursor.isEmpty {
+            greetingMCPServerCursor = nextCursor
+            beginGreetingMCPServerStatus()
+        } else {
+            greetingMCPServerCursor = nil
+            beginGreeting()
+        }
+    }
+
+    private func createGreetingWorkingDirectory() -> URL? {
+        let directory = fileManager.temporaryDirectory
+            .appendingPathComponent("KestraLimitRefresh-\(UUID().uuidString)", isDirectory: true)
+        do {
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: false,
+                attributes: [.posixPermissions: 0o700]
+            )
+            return directory
+        } catch {
+            reportError("创建额度问候临时目录失败：\(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func sendAccountRequest() {
@@ -172,6 +391,7 @@ final class CodexAppServerClient {
         }
         loginID = nil
         finishAccount(.failure(CodexAppServerError.notRunning))
+        finishGreeting(.failure(CodexAppServerError.notRunning))
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         process?.terminationHandler = nil
         process?.terminate()
@@ -301,6 +521,22 @@ final class CodexAppServerClient {
                 loginID = nil
                 onLoginCompleted?(params["success"] as? Bool == true, params["error"] as? String)
             }
+            if method == "turn/completed",
+               let params = object["params"] as? [String: Any],
+               let threadID = params["threadId"] as? String,
+               threadID == greetingThreadID,
+               let turn = params["turn"] as? [String: Any],
+               let turnID = turn["id"] as? String,
+               turnID == greetingTurnID {
+                let status = turn["status"] as? String
+                if status == "completed" {
+                    finishGreeting(.success(()))
+                } else {
+                    let message = (turn["error"] as? [String: Any])?["message"] as? String
+                        ?? "问候任务未完成（\(status ?? "未知状态")）"
+                    finishGreeting(.failure(CodexAppServerError.server(message)))
+                }
+            }
             if method.hasPrefix("thread/") || method.hasPrefix("turn/") {
                 onActivityChanged?()
 
@@ -342,6 +578,9 @@ final class CodexAppServerClient {
 
             if accountCompletion != nil { sendAccountRequest() }
             onInitialized?()
+            if pendingGreetingMessage != nil {
+                beginGreetingMCPServerStatus()
+            }
             if let queuedThreadListCompletion {
                 self.queuedThreadListCompletion = nil
                 beginThreadList(completion: queuedThreadListCompletion)
@@ -367,6 +606,8 @@ final class CodexAppServerClient {
             guard var identity = pendingAccountIdentity else { return }
             identity.usage = CodexAccountUsage.parse(result)
             finishAccount(.success(identity))
+        case .greetingMCPServerStatus:
+            handleGreetingMCPServerStatus(result)
         case .login:
             guard let id = result["loginId"] as? String,
                   let rawURL = result["authUrl"] as? String,
@@ -377,6 +618,22 @@ final class CodexAppServerClient {
             }
             loginID = id
             onLoginURL?(url)
+        case .greetingThreadStart:
+            guard let thread = result["thread"] as? [String: Any],
+                  let threadID = thread["id"] as? String,
+                  !threadID.isEmpty else {
+                finishGreeting(.failure(CodexAppServerError.invalidResponse))
+                return
+            }
+            beginGreetingTurn(threadID: threadID)
+        case .greetingTurnStart:
+            guard let turn = result["turn"] as? [String: Any],
+                  let turnID = turn["id"] as? String,
+                  !turnID.isEmpty else {
+                finishGreeting(.failure(CodexAppServerError.invalidResponse))
+                return
+            }
+            greetingTurnID = turnID
         }
     }
 
@@ -463,12 +720,15 @@ final class CodexAppServerClient {
             let completion = activeThreadListCompletion
             activeThreadListCompletion = nil
             completion?(result)
+        case .greetingMCPServerStatus, .greetingThreadStart, .greetingTurnStart:
+            finishGreeting(.failure(CodexAppServerError.server(result.errorDescription)))
         }
     }
 
     private func handleTermination(status: Int32) {
         guard process != nil else { return }
         finishAccount(.failure(CodexAppServerError.notRunning))
+        finishGreeting(.failure(CodexAppServerError.notRunning))
 
         outputPipe?.fileHandleForReading.readabilityHandler = nil
         process = nil
