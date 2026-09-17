@@ -45,6 +45,7 @@ enum MenuBarIconPluginLimits {
 }
 
 enum MenuBarIconPluginCatalog {
+    static let statusIconID = "client-status"
     static let squatID = "barbell-squat"
     static let kestraLogoID = "kestra-logo"
     static let sparklesID = "sparkles"
@@ -52,6 +53,21 @@ enum MenuBarIconPluginCatalog {
     static func builtIns() -> (plugins: [MenuBarIconPlugin], errors: [String]) {
         var plugins: [MenuBarIconPlugin] = []
         var errors: [String] = []
+
+        // This option is rendered by MenubarStatusIconRenderer because it
+        // needs live provider, task, and quota state rather than a static
+        // frame. A system symbol keeps it part of the same plugin catalog and
+        // reserves its identifier from external icon packages.
+        plugins.append(
+            MenuBarIconPlugin(
+                option: MenuBarIconOption(id: statusIconID, name: "客户端状态"),
+                frames: [],
+                systemSymbolName: "circle",
+                idleFrame: 0,
+                cycleDuration: 1.2,
+                countsTowardSquat: false
+            )
+        )
 
         let squatFrames = (0..<8).compactMap { frame in
             KestraResourceBundle.bundle.url(

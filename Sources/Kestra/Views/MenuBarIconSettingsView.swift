@@ -2,10 +2,12 @@ import SwiftUI
 
 struct MenuBarIconSettingsView: View {
     @ObservedObject var squatRunner: SquatRunner
+    @ObservedObject var layoutSettings: MenuBarIconLayoutSettingsStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle
+            layoutRow
             iconOptions
             actionRow
 
@@ -37,6 +39,39 @@ struct MenuBarIconSettingsView: View {
                 }
             }
         }
+    }
+
+    private var layoutRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "rectangle.compress.vertical")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+            Text("布局")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
+
+            Spacer(minLength: 4)
+
+            Picker(
+                "布局",
+                selection: Binding(
+                    get: { layoutSettings.mode },
+                    set: { layoutSettings.setMode($0) }
+                )
+            ) {
+                ForEach(MenuBarIconLayoutMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 116)
+        }
+        .padding(.horizontal, 9)
+        .frame(minHeight: 28)
+        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func iconOptionRow(_ option: MenuBarIconOption) -> some View {

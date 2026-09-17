@@ -7,15 +7,15 @@ struct ScreenPositionPicker: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.025))
+            RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.025))
             ForEach(Array(CompletionDisplayPosition.allCases.enumerated()), id: \.element) { index, candidate in
                 let column = index % 3
                 let row = index / 3
                 Button { onSelect(candidate) } label: {
                     Rectangle()
-                        .fill(position == candidate ? tint.opacity(0.25) : Color.white.opacity(0.025))
+                        .fill(position == candidate ? tint.opacity(0.25) : Color.primary.opacity(0.025))
                         .frame(width: column == 1 ? 124 : 48, height: row == 1 ? 64 : 32)
-                        .overlay(Rectangle().strokeBorder(.white.opacity(0.16), lineWidth: 0.5))
+                        .overlay(Rectangle().strokeBorder(.primary.opacity(0.16), lineWidth: 0.5))
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -31,7 +31,7 @@ struct ScreenPositionPicker: View {
         }
         .frame(width: 220, height: 128)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.24)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.primary.opacity(0.24)))
         .frame(maxWidth: .infinity)
     }
 

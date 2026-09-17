@@ -102,8 +102,8 @@ final class SquatRunner: ObservableObject {
         pluginErrors = builtIns.errors + result.errors
 
         let requestedID = defaults.string(forKey: Self.selectedIconKey)
-        let fallbackID = plugins[MenuBarIconPluginCatalog.squatID] != nil
-            ? MenuBarIconPluginCatalog.squatID
+        let fallbackID = plugins[MenuBarIconPluginCatalog.statusIconID] != nil
+            ? MenuBarIconPluginCatalog.statusIconID
             : result.plugins.first?.option.id
 
         if let requestedID, let requestedPlugin = plugins[requestedID] {

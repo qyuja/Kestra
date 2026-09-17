@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SpringScaleAnimationPlugin: CompletionAnimationPlugin {
@@ -37,7 +38,7 @@ private struct SpringScaleAnimationView: View {
                     cornerRadius: configuration.cardCornerRadius,
                     style: .continuous
                 )
-                .fill(Color.black)
+                .fill(Color(nsColor: .windowBackgroundColor))
             )
             .clipShape(
                 RoundedRectangle(

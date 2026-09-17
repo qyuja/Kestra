@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct LiquidDropAnimationPlugin: CompletionAnimationPlugin {
@@ -40,7 +41,7 @@ private struct LiquidDropAnimationView: View {
     var body: some View {
         ZStack {
             liquidShape
-                .fill(Color.black)
+                .fill(Color(nsColor: .windowBackgroundColor))
 
             content
                 .opacity(contentIsVisible ? 1 : 0)

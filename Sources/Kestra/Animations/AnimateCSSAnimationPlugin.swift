@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum AnimateCSSAnimationPreset: String, CaseIterable, Codable, Identifiable {
@@ -143,7 +144,7 @@ private struct AnimateCSSAnimationView: View {
                     cornerRadius: configuration.cardCornerRadius,
                     style: .continuous
                 )
-                .fill(Color.black)
+                .fill(Color(nsColor: .windowBackgroundColor))
             )
             .clipShape(
                 RoundedRectangle(

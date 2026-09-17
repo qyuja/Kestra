@@ -1,14 +1,15 @@
 import Foundation
+import AppKit
 import SwiftUI
 
 enum StatusPopoverStyle {
-    static let selectionColor = Color(red: 0.35, green: 0.86, blue: 0.38)
-    static let surface = Color(red: 0.035, green: 0.035, blue: 0.04)
-    static let tile = Color(red: 0.06, green: 0.065, blue: 0.07)
-    static let selectedTile = Color(red: 0.02, green: 0.20, blue: 0.09)
-    static let divider = Color(red: 0.15, green: 0.16, blue: 0.18)
-    static let primaryText = Color.white.opacity(0.88)
-    static let secondaryText = Color.white.opacity(0.56)
+    static let selectionColor = Color(nsColor: .systemGreen)
+    static let surface = Color(nsColor: .windowBackgroundColor)
+    static let tile = Color(nsColor: .controlBackgroundColor)
+    static let selectedTile = Color(nsColor: .systemGreen).opacity(0.14)
+    static let divider = Color(nsColor: .separatorColor)
+    static let primaryText = Color.primary.opacity(0.88)
+    static let secondaryText = Color.secondary.opacity(0.82)
 }
 
 struct StatusPopoverView: View {
@@ -21,6 +22,8 @@ struct StatusPopoverView: View {
     @ObservedObject var squatRunner: SquatRunner
     @ObservedObject var providerSelection: AIProviderSelectionStore
     @ObservedObject var previewSettings: CodexTaskPreviewSettingsStore
+    @ObservedObject var themeStore: KestraThemeStore
+    @ObservedObject var menuBarIconLayoutSettings: MenuBarIconLayoutSettingsStore
     @ObservedObject var updater: KestraUpdater
     @ObservedObject var launchAtLogin: KestraLaunchAtLogin
     @ObservedObject var limitRefreshSettings: CodexLimitRefreshSettingsStore
@@ -67,6 +70,7 @@ struct StatusPopoverView: View {
         .padding(16)
         .frame(width: 420, height: 560, alignment: .topLeading)
         .background(StatusPopoverStyle.surface)
+        .preferredColorScheme(themeStore.mode == .light ? .light : .dark)
         .onHover(perform: onHover)
         .onAppear(perform: syncActiveProvider)
         .onReceive(store.$tasks) { displayedTasks = $0 }
@@ -129,13 +133,13 @@ struct StatusPopoverView: View {
                     .foregroundStyle(
                         section == .settings
                             ? StatusPopoverStyle.selectionColor
-                            : .white.opacity(0.58)
+                            : .primary.opacity(0.58)
                     )
                     .frame(width: 28, height: 28)
                     .background(
                         section == .settings
                             ? StatusPopoverStyle.selectedTile
-                            : .white.opacity(0.08),
+                            : .primary.opacity(0.08),
                         in: Circle()
                     )
             }
@@ -146,9 +150,9 @@ struct StatusPopoverView: View {
             Button(action: onQuit) {
                 Image(systemName: "power")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.42))
+                    .foregroundStyle(.primary.opacity(0.42))
                     .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.08), in: Circle())
+                    .background(.primary.opacity(0.08), in: Circle())
             }
             .buttonStyle(.plain)
             .help("退出 Kestra")
@@ -162,7 +166,7 @@ struct StatusPopoverView: View {
             providerTabs
 
             Divider()
-                .overlay(.white.opacity(0.10))
+                .overlay(.primary.opacity(0.10))
 
             if activeProvider.isImplemented {
                 codexTaskList
@@ -189,19 +193,19 @@ struct StatusPopoverView: View {
                                 Text("\(displayedTasks.filter { $0.provider == provider && $0.isRunning }.count)")
                                     .font(.system(size: 10, weight: .bold, design: .rounded))
                                     .monospacedDigit()
-                                    .foregroundStyle(.white.opacity(0.48))
+                                    .foregroundStyle(.primary.opacity(0.48))
                             }
                             .foregroundStyle(
                                 activeProvider == provider
                                     ? StatusPopoverStyle.selectionColor
-                                    : .white.opacity(0.48)
+                                    : .primary.opacity(0.48)
                             )
                             .padding(.horizontal, 10)
                             .padding(.vertical, 7)
                             .background(
                                 activeProvider == provider
                                     ? .clear
-                                    : .white.opacity(0.05),
+                                    : .primary.opacity(0.05),
                                 in: Capsule()
                             )
                         }
@@ -210,20 +214,20 @@ struct StatusPopoverView: View {
                         if activeProvider == provider && provider == .claude {
                             Button { showsQuickClaudeAccounts.toggle() } label: {
                                 Image(systemName: "arrow.triangle.swap").font(.system(size: 10, weight: .semibold))
-                                    .frame(width: 22, height: 22).background(.white.opacity(0.08), in: Circle())
+                                    .frame(width: 22, height: 22).background(.primary.opacity(0.08), in: Circle())
                             }
                             .buttonStyle(.plain)
                             .help("切换 Claude Code 账号")
                             .popover(isPresented: $showsQuickClaudeAccounts, arrowEdge: .bottom) {
                                 ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, management: false)
-                                    .padding(10).frame(width: 320).preferredColorScheme(.dark)
+                                    .padding(10).frame(width: 320)
                             }
                             Button(action: onOpenClaude) {
                                 Image(systemName: "arrow.up.forward.app")
                                     .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(ApplicationLauncher.isClaudeDesktopInstalled ? 0.42 : 0.18))
+                                    .foregroundStyle(.primary.opacity(ApplicationLauncher.isClaudeDesktopInstalled ? 0.42 : 0.18))
                                     .frame(width: 22, height: 22)
-                                    .background(.white.opacity(0.08), in: Circle())
+                                    .background(.primary.opacity(0.08), in: Circle())
                             }
                             .buttonStyle(.plain)
                             .disabled(!ApplicationLauncher.isClaudeDesktopInstalled)
@@ -234,10 +238,10 @@ struct StatusPopoverView: View {
                             quickAccountButton
                             Button(action: onOpenCodex) {
                                 Image(systemName: "arrow.up.forward.app")
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.42))
-                                    .frame(width: 22, height: 22)
-                                    .background(.white.opacity(0.08), in: Circle())
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.42))
+                .frame(width: 22, height: 22)
+                .background(.primary.opacity(0.08), in: Circle())
                             }
                             .buttonStyle(.plain)
                             .help("打开 \(provider.name)")
@@ -276,7 +280,7 @@ struct StatusPopoverView: View {
                     taskGroupTitle(
                         "最近任务",
                         count: recentTasks.count,
-                        tint: .white.opacity(0.42),
+                        tint: .primary.opacity(0.42),
                         isExpanded: $isRecentSectionExpanded
                     )
                         .padding(.top, runningTasks.isEmpty ? 0 : 4)
@@ -320,7 +324,7 @@ struct StatusPopoverView: View {
                 Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .bold))
                     .frame(width: 22, height: 22)
-                    .background(.white.opacity(0.08), in: Circle())
+                    .background(.primary.opacity(0.08), in: Circle())
             }
             .font(.system(size: 10, weight: .semibold))
             .foregroundStyle(tint)
@@ -339,7 +343,7 @@ struct StatusPopoverView: View {
                 .foregroundStyle(.green.opacity(0.8))
             Text(activeProvider == .claude ? store.claudeStatus : store.cliStatuses[activeProvider] ?? "当前没任务")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white.opacity(0.52))
+                .foregroundStyle(.primary.opacity(0.52))
             if activeProvider == .claude && !ClaudeHookMonitor.isConfigured && ClaudeHookMonitor.executable != nil {
                 Button("连接 Claude Code", action: store.connectClaude)
                     .buttonStyle(.bordered)
@@ -373,10 +377,10 @@ struct StatusPopoverView: View {
                 .foregroundStyle(activeProvider.tint.opacity(0.75))
             Text("暂未接入 \(activeProvider.name)")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.78))
+                .foregroundStyle(.primary.opacity(0.78))
             Text(activeProvider.integrationStatus)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.white.opacity(0.42))
+                .foregroundStyle(.primary.opacity(0.42))
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity, minHeight: 150)
@@ -397,18 +401,22 @@ struct StatusPopoverView: View {
             if let lastUpdated = store.lastUpdated {
                 Text(lastUpdated, style: .time)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.28))
+                    .foregroundStyle(.primary.opacity(0.28))
             }
         }
         .font(.system(size: 10, weight: .semibold))
-        .foregroundStyle(.white.opacity(0.52))
+        .foregroundStyle(.primary.opacity(0.52))
     }
 
     private var settingsSection: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                themeSection
                 providerVisibilitySection
-                MenuBarIconSettingsView(squatRunner: squatRunner)
+                MenuBarIconSettingsView(
+                    squatRunner: squatRunner,
+                    layoutSettings: menuBarIconLayoutSettings
+                )
 
                 taskPreviewRow
                 displayPositionSection
@@ -430,15 +438,47 @@ struct StatusPopoverView: View {
         .frame(maxHeight: .infinity)
     }
 
+    private var themeSection: some View {
+        HStack(spacing: 10) {
+            Image(systemName: themeStore.mode == .light ? "sun.max.fill" : "moon.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+            Text("主题")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
+
+            Spacer(minLength: 8)
+
+            Picker(
+                "主题",
+                selection: Binding(
+                    get: { themeStore.mode },
+                    set: { themeStore.setMode($0) }
+                )
+            ) {
+                ForEach(KestraThemeMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 126)
+        }
+        .padding(10)
+        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+    }
+
     private var quickAccountButton: some View {
         Button {
             showsQuickAccounts.toggle()
         } label: {
             Image(systemName: "arrow.triangle.swap")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.65))
+                .foregroundStyle(.primary.opacity(0.65))
                 .frame(width: 22, height: 22)
-                .background(.white.opacity(0.08), in: Circle())
+                .background(.primary.opacity(0.08), in: Circle())
         }
         .buttonStyle(.plain)
         .help("切换账号")
@@ -461,7 +501,6 @@ struct StatusPopoverView: View {
             }
             .padding(8)
             .frame(width: 320)
-            .preferredColorScheme(.dark)
         }
     }
 
@@ -580,7 +619,7 @@ struct StatusPopoverView: View {
     private func quotaRing(_ window: CodexAccountUsage.Window?, fallback: String, error: String?) -> some View {
         VStack(spacing: 3) {
             ZStack {
-                Circle().stroke(.white.opacity(0.10), lineWidth: 3)
+                Circle().stroke(.primary.opacity(0.10), lineWidth: 3)
                 if let window {
                     Circle().trim(from: 0, to: CGFloat(window.remainingPercent) / 100)
                         .stroke(window.remainingPercent <= 10 ? Color.orange : StatusPopoverStyle.selectionColor,
@@ -610,7 +649,7 @@ struct StatusPopoverView: View {
                                 .saturation(providerSelection.isSelected(provider) ? 1 : 0)
                                 .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
                             Text(provider.name).font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(providerSelection.isSelected(provider) ? 0.88 : 0.30))
+                                .foregroundStyle(.primary.opacity(providerSelection.isSelected(provider) ? 0.88 : 0.30))
                             if !provider.isImplemented {
                                 Text("未接入").font(.system(size: 9)).foregroundStyle(.secondary)
                             }
@@ -806,7 +845,7 @@ struct StatusPopoverView: View {
                     .padding(.horizontal, 10)
                     .frame(width: 144, height: 28)
                     .background(hoveredExitDirection == direction ? StatusPopoverStyle.selectedTile : .clear, in: RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(hoveredExitDirection == direction ? StatusPopoverStyle.selectionColor : .white.opacity(0.8))
+                    .foregroundStyle(hoveredExitDirection == direction ? StatusPopoverStyle.selectionColor : .primary.opacity(0.8))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -820,7 +859,6 @@ struct StatusPopoverView: View {
             }
         }
         .padding(6)
-        .preferredColorScheme(.dark)
         .onDisappear { hoveredExitDirection = nil }
     }
 
@@ -1218,7 +1256,7 @@ private struct TaskRow: View {
                         RunningTaskIndicator()
                     } else {
                         Circle()
-                            .fill(.white.opacity(0.28))
+                            .fill(.primary.opacity(0.28))
                             .frame(width: 7, height: 7)
                     }
                 }
@@ -1229,7 +1267,7 @@ private struct TaskRow: View {
                     HStack(spacing: 6) {
                         Text(task.threadName)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.88))
+                            .foregroundStyle(.primary.opacity(0.88))
                             .lineLimit(1)
 
                         Spacer(minLength: 4)
@@ -1237,7 +1275,7 @@ private struct TaskRow: View {
                         TimelineView(.periodic(from: .now, by: task.isRunning ? 1 : 60)) { context in
                             Text(task.timeText(at: context.date))
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white.opacity(0.34))
+                                .foregroundStyle(.primary.opacity(0.34))
                                 .monospacedDigit()
                                 .lineLimit(1)
                                 .fixedSize()
@@ -1246,7 +1284,7 @@ private struct TaskRow: View {
 
                     Text(task.latestMessage)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.44))
+                        .foregroundStyle(.primary.opacity(0.44))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
 
@@ -1261,19 +1299,19 @@ private struct TaskRow: View {
                         }
                         Text(task.modelText)
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.42))
+                            .foregroundStyle(.primary.opacity(0.42))
                             .lineLimit(1)
                     }
                 }
 
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.28))
+                    .foregroundStyle(.primary.opacity(0.28))
                     .padding(.top, 2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

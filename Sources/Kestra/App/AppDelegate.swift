@@ -12,6 +12,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let limitRefreshSettings = CodexLimitRefreshSettingsStore()
     let updater = KestraUpdater()
     let launchAtLogin = KestraLaunchAtLogin()
+    let themeStore = KestraThemeStore()
+    let menuBarIconLayoutSettings = MenuBarIconLayoutSettingsStore()
 
     private(set) var isIslandVisible = false
 
@@ -67,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ApplicationLauncher.openCodexTask(task)
             },
             animationRegistry: completionAnimationRegistry,
-            animationSettings: animationSettings
+            animationSettings: animationSettings,
+            themeStore: themeStore
         )
         self.completionPanelController = completionPanelController
 
@@ -78,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updater: updater,
             launchAtLogin: launchAtLogin,
             limitRefreshSettings: limitRefreshSettings,
+            themeStore: themeStore,
+            menuBarIconLayoutSettings: menuBarIconLayoutSettings,
             onOpenTask: { task in
                 ApplicationLauncher.openCodexTask(task)
             },

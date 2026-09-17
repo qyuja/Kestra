@@ -49,7 +49,7 @@ struct ClaudeAccountsView: View {
                         .menuStyle(.borderlessButton).fixedSize()
                         .disabled(accounts.busy || accounts.needsRecovery)
                     }
-                }.padding(8).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(8).background(.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
             }
             if accounts.needsRecovery { Button("恢复原账号") { accounts.recover() }.disabled(accounts.busy || hasRunningTasks) }
             if let message = accounts.message { Text(message).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }

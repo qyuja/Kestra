@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -6,6 +7,7 @@ final class CodexCompletionPanelController: NSObject {
     private let onOpenTask: (CodexTask) -> Void
     private let animationRegistry: CompletionAnimationRegistry
     private let animationSettings: CompletionAnimationSettingsStore
+    private let themeStore: KestraThemeStore
     private let panelSize = NSSize(width: 368, height: 86)
 
     private var panel: NSPanel?
@@ -21,6 +23,7 @@ final class CodexCompletionPanelController: NSObject {
     private var activeExitEffect = CompletionExitEffect.fade
     private var activeExitDirection = AnimateCSSAnimationPreset.fadeIn
     private var fragmentPanel: NSPanel?
+    private var cancellables = Set<AnyCancellable>()
 
     func preview(request: CompletionPreviewRequest) {
         cancelPreview()
@@ -49,12 +52,20 @@ final class CodexCompletionPanelController: NSObject {
     init(
         onOpenTask: @escaping (CodexTask) -> Void,
         animationRegistry: CompletionAnimationRegistry,
-        animationSettings: CompletionAnimationSettingsStore
+        animationSettings: CompletionAnimationSettingsStore,
+        themeStore: KestraThemeStore
     ) {
         self.onOpenTask = onOpenTask
         self.animationRegistry = animationRegistry
         self.animationSettings = animationSettings
+        self.themeStore = themeStore
         super.init()
+
+        themeStore.$mode.sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updatePanelAppearance()
+            }
+        }.store(in: &cancellables)
     }
 
     func enqueue(_ task: CodexTask) {
@@ -104,6 +115,7 @@ final class CodexCompletionPanelController: NSObject {
                 task: task,
                 animationPlugin: animation,
                 animationConfiguration: configuration,
+                themeStore: themeStore,
                 onHover: { [weak self] hovering in
                     self?.setHovering(hovering)
                 },
@@ -179,6 +191,7 @@ final class CodexCompletionPanelController: NSObject {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        panel.appearance = themeAppearance
         panel.level = .statusBar
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
@@ -187,6 +200,14 @@ final class CodexCompletionPanelController: NSObject {
 
         self.panel = panel
         return panel
+    }
+
+    private var themeAppearance: NSAppearance? {
+        NSAppearance(named: themeStore.mode == .dark ? .darkAqua : .aqua)
+    }
+
+    private func updatePanelAppearance() {
+        panel?.appearance = themeAppearance
     }
 
     private func frameForPanel() -> NSRect {
@@ -398,6 +419,7 @@ private struct CodexCompletionView: View {
     let task: CodexTask
     let animationPlugin: any CompletionAnimationPlugin
     let animationConfiguration: CompletionAnimationConfiguration
+    @ObservedObject var themeStore: KestraThemeStore
     let onHover: (Bool) -> Void
     let onOpen: () -> Void
 
@@ -412,6 +434,7 @@ private struct CodexCompletionView: View {
             configuration: animationConfiguration
         )
         .onHover(perform: onHover)
+        .preferredColorScheme(themeStore.mode == .light ? .light : .dark)
     }
 
     private var cardContent: some View {
@@ -430,25 +453,25 @@ private struct CodexCompletionView: View {
                 HStack(spacing: 6) {
                     Text("\(task.provider.name) 已完成")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.64))
+                        .foregroundStyle(.primary.opacity(0.64))
 
                     Circle()
-                        .fill(.white.opacity(0.25))
+                        .fill(.primary.opacity(0.25))
                         .frame(width: 3, height: 3)
 
                     Text(task.shortIdentifier)
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.34))
+                        .foregroundStyle(.primary.opacity(0.34))
                 }
 
                 Text(task.title)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Text(task.summary)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.44))
+                    .foregroundStyle(.primary.opacity(0.44))
                     .lineLimit(1)
             }
 
@@ -456,7 +479,7 @@ private struct CodexCompletionView: View {
 
             Image(systemName: "arrow.up.forward.app")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.48))
+                .foregroundStyle(.primary.opacity(0.48))
         }
         .padding(.horizontal, 14)
         .frame(width: 368, height: 86)
