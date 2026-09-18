@@ -54,16 +54,14 @@ struct MenubarStatusIconRenderer {
         let center: NSPoint
         let ringRadius: CGFloat
         let ringLineWidth: CGFloat
-        private let singleLogoSize: CGFloat
-        private let doubleLogoSize: CGFloat
+        private let quotaLogoSize: CGFloat
         private let fallbackLogoSize: CGFloat
 
         init() {
             imageSize = NSSize(width: 24, height: 24)
             ringRadius = 10.5
             ringLineWidth = 2
-            singleLogoSize = 16
-            doubleLogoSize = 12
+            quotaLogoSize = 16
             fallbackLogoSize = 19
 
             center = NSPoint(x: imageSize.width / 2, y: imageSize.height / 2)
@@ -71,8 +69,7 @@ struct MenubarStatusIconRenderer {
 
         func logoSize(forWindowCount count: Int) -> CGFloat {
             switch count {
-            case 1: singleLogoSize
-            case 2: doubleLogoSize
+            case 1, 2: quotaLogoSize
             default: fallbackLogoSize
             }
         }
