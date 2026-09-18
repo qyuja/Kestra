@@ -116,12 +116,6 @@ final class IslandStatusItemController: NSObject {
             }
         }.store(in: &cancellables)
 
-        menuBarIconLayoutSettings.$mode.sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.configureButton()
-            }
-        }.store(in: &cancellables)
-
         squatRunner.$selectedIconID.sink { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.configureButton()
@@ -187,8 +181,7 @@ final class IslandStatusItemController: NSObject {
             usage: currentUsage,
             isRunning: selectedRunningTaskCount > 0,
             rotationAngle: logoRotationAngle,
-            isDark: menuBarUsesDarkAppearance,
-            layout: menuBarIconLayoutSettings.mode
+            isDark: menuBarUsesDarkAppearance
         )
     }
 
@@ -198,11 +191,7 @@ final class IslandStatusItemController: NSObject {
     }
 
     private func makeRunnerImage() -> NSImage {
-        let isCompact = menuBarIconLayoutSettings.mode == .compact
-        let imageSize = NSSize(
-            width: isCompact ? 20 : 22,
-            height: isCompact ? 19 : 21
-        )
+        let imageSize = NSSize(width: 22, height: 21)
         let image = NSImage(size: imageSize)
         image.lockFocus()
         NSGraphicsContext.current?.imageInterpolation = .high

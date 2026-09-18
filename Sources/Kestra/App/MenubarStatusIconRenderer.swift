@@ -1,12 +1,10 @@
 import AppKit
 
 /// Draws the compact status item image without creating another view or
-/// window. The quota progress uses a single green accent while the short and
-/// long windows remain split into left and right arcs.
+/// window. The short and long quota windows remain split into left and right
+/// arcs, with each arc colored by its remaining percentage.
 @MainActor
 struct MenubarStatusIconRenderer {
-    private static let progressColor = NSColor.systemGreen
-
     private static var cachedBrandLogo: NSImage?
 
     static func makeImage(
@@ -14,10 +12,9 @@ struct MenubarStatusIconRenderer {
         usage: CodexAccountUsage?,
         isRunning: Bool,
         rotationAngle: CGFloat,
-        isDark: Bool,
-        layout: MenuBarIconLayoutMode = .normal
+        isDark: Bool
     ) -> NSImage {
-        let geometry = IconGeometry(layout: layout)
+        let geometry = IconGeometry()
         let windows = Array((usage?.displayWindows ?? []).prefix(2))
         let image = NSImage(size: geometry.imageSize)
         image.lockFocus()
@@ -61,26 +58,13 @@ struct MenubarStatusIconRenderer {
         private let doubleLogoSize: CGFloat
         private let fallbackLogoSize: CGFloat
 
-        init(layout: MenuBarIconLayoutMode) {
-            switch layout {
-            case .compact:
-                // Keep the provider mark at the normal size. Compact mode
-                // only reduces the surrounding canvas and ring-to-edge
-                // spacing so the status item occupies less room.
-                imageSize = NSSize(width: 22, height: 22)
-                ringRadius = 9.5
-                ringLineWidth = 2
-                singleLogoSize = 16
-                doubleLogoSize = 12
-                fallbackLogoSize = 19
-            case .normal:
-                imageSize = NSSize(width: 24, height: 24)
-                ringRadius = 10.5
-                ringLineWidth = 2
-                singleLogoSize = 16
-                doubleLogoSize = 12
-                fallbackLogoSize = 19
-            }
+        init() {
+            imageSize = NSSize(width: 24, height: 24)
+            ringRadius = 10.5
+            ringLineWidth = 2
+            singleLogoSize = 16
+            doubleLogoSize = 12
+            fallbackLogoSize = 19
 
             center = NSPoint(x: imageSize.width / 2, y: imageSize.height / 2)
         }
@@ -167,20 +151,21 @@ struct MenubarStatusIconRenderer {
         _ window: CodexAccountUsage.Window,
         geometry: IconGeometry
     ) {
-        drawTrack(geometry: geometry, color: progressColor)
+        let color = QuotaProgressColor.forRemainingPercent(window.remainingPercent).nsColor
+        drawTrack(geometry: geometry, color: color)
 
         let progress = CGFloat(window.remainingPercent) / 100
         guard progress > 0 else { return }
 
         if progress >= 1 {
-            drawFullRing(geometry: geometry, color: progressColor)
+            drawFullRing(geometry: geometry, color: color)
         } else {
             drawArc(
                 geometry: geometry,
                 startAngle: 90,
                 endAngle: 90 - 360 * progress,
                 clockwise: true,
-                color: progressColor
+                color: color
             )
         }
     }
@@ -190,19 +175,26 @@ struct MenubarStatusIconRenderer {
         longWindow: CodexAccountUsage.Window,
         geometry: IconGeometry
     ) {
+        let shortColor = QuotaProgressColor
+            .forRemainingPercent(shortWindow.remainingPercent)
+            .nsColor
+        let longColor = QuotaProgressColor
+            .forRemainingPercent(longWindow.remainingPercent)
+            .nsColor
+
         drawArc(
             geometry: geometry,
             startAngle: 90,
             endAngle: 270,
             clockwise: false,
-            color: progressColor.withAlphaComponent(0.22)
+            color: shortColor.withAlphaComponent(0.22)
         )
         drawArc(
             geometry: geometry,
             startAngle: 90,
             endAngle: -90,
             clockwise: true,
-            color: progressColor.withAlphaComponent(0.22)
+            color: longColor.withAlphaComponent(0.22)
         )
 
         let shortProgress = CGFloat(shortWindow.remainingPercent) / 100
@@ -212,7 +204,7 @@ struct MenubarStatusIconRenderer {
                 startAngle: 90,
                 endAngle: 270,
                 clockwise: false,
-                color: progressColor
+                color: shortColor
             )
         } else if shortProgress > 0 {
             drawArc(
@@ -220,7 +212,7 @@ struct MenubarStatusIconRenderer {
                 startAngle: 90,
                 endAngle: 90 + 180 * shortProgress,
                 clockwise: false,
-                color: progressColor
+                color: shortColor
             )
         }
 
@@ -231,7 +223,7 @@ struct MenubarStatusIconRenderer {
                 startAngle: 90,
                 endAngle: -90,
                 clockwise: true,
-                color: progressColor
+                color: longColor
             )
         } else if longProgress > 0 {
             drawArc(
@@ -239,7 +231,7 @@ struct MenubarStatusIconRenderer {
                 startAngle: 90,
                 endAngle: 90 - 180 * longProgress,
                 clockwise: true,
-                color: progressColor
+                color: longColor
             )
         }
     }

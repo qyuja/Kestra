@@ -1,11 +1,20 @@
 import Combine
 import Foundation
+import SwiftUI
+
+extension EnvironmentValues {
+    @Entry var popoverLayoutMode: MenuBarIconLayoutMode = .normal
+}
 
 enum MenuBarIconLayoutMode: String, CaseIterable, Codable, Identifiable {
     case compact
     case normal
 
     var id: String { rawValue }
+
+    func spacing(_ normal: CGFloat) -> CGFloat {
+        self == .compact ? normal * 0.65 : normal
+    }
 
     var title: String {
         switch self {

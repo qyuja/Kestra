@@ -2,12 +2,11 @@ import SwiftUI
 
 struct MenuBarIconSettingsView: View {
     @ObservedObject var squatRunner: SquatRunner
-    @ObservedObject var layoutSettings: MenuBarIconLayoutSettingsStore
+    @Environment(\.popoverLayoutMode) private var layoutMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             sectionTitle
-            layoutRow
             iconOptions
             actionRow
 
@@ -26,13 +25,13 @@ struct MenuBarIconSettingsView: View {
     }
 
     private var iconOptions: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: layoutMode.spacing(6)) {
             if squatRunner.options.isEmpty {
                 Text("暂无可用图标")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(StatusPopoverStyle.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                    .padding(.horizontal, 9)
+                    .padding(.horizontal, layoutMode.spacing(9))
             } else {
                 ForEach(squatRunner.options, id: \.id) { option in
                     iconOptionRow(option)
@@ -41,46 +40,13 @@ struct MenuBarIconSettingsView: View {
         }
     }
 
-    private var layoutRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "rectangle.compress.vertical")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(StatusPopoverStyle.selectionColor)
-
-            Text("布局")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(StatusPopoverStyle.primaryText)
-
-            Spacer(minLength: 4)
-
-            Picker(
-                "布局",
-                selection: Binding(
-                    get: { layoutSettings.mode },
-                    set: { layoutSettings.setMode($0) }
-                )
-            ) {
-                ForEach(MenuBarIconLayoutMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .controlSize(.small)
-            .frame(width: 116)
-        }
-        .padding(.horizontal, 9)
-        .frame(minHeight: 28)
-        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
-    }
-
     private func iconOptionRow(_ option: MenuBarIconOption) -> some View {
         let isSelected = squatRunner.selectedIconID == option.id
 
         return Button {
             squatRunner.selectIcon(option.id)
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMode.spacing(8)) {
                 Circle()
                     .fill(
                         isSelected
@@ -106,7 +72,7 @@ struct MenuBarIconSettingsView: View {
                     .foregroundStyle(StatusPopoverStyle.selectionColor)
                     .opacity(isSelected ? 1 : 0)
             }
-            .padding(.horizontal, 9)
+            .padding(.horizontal, layoutMode.spacing(9))
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background(
                 isSelected
@@ -122,7 +88,7 @@ struct MenuBarIconSettingsView: View {
     }
 
     private var actionRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: layoutMode.spacing(12)) {
             Button(action: squatRunner.openPluginsDirectory) {
                 Label("打开插件目录", systemImage: "folder")
             }

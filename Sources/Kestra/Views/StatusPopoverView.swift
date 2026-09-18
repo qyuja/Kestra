@@ -56,10 +56,12 @@ struct StatusPopoverView: View {
     @State private var accountRemark = ""
     @State private var hoveredExitDirection: AnimateCSSAnimationPreset?
 
+    private var layoutMode: MenuBarIconLayoutMode { menuBarIconLayoutSettings.mode }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-                .padding(.bottom, 12)
+                .padding(.bottom, layoutMode.spacing(12))
 
             if section == .tasks {
                 taskSection
@@ -67,9 +69,10 @@ struct StatusPopoverView: View {
                 settingsSection
             }
         }
-        .padding(16)
+        .padding(layoutMode.spacing(16))
         .frame(width: 420, height: 560, alignment: .topLeading)
         .background(StatusPopoverStyle.surface)
+        .environment(\.popoverLayoutMode, layoutMode)
         .preferredColorScheme(themeStore.mode == .light ? .light : .dark)
         .onHover(perform: onHover)
         .onAppear(perform: syncActiveProvider)
@@ -114,7 +117,7 @@ struct StatusPopoverView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: layoutMode.spacing(10)) {
             AppBrandIcon(size: 32, weight: .bold)
 
             Text("Kestra")
@@ -162,7 +165,7 @@ struct StatusPopoverView: View {
     }
 
     private var taskSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(10)) {
             providerTabs
 
             Divider()
@@ -180,13 +183,13 @@ struct StatusPopoverView: View {
 
     private var providerTabs: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMode.spacing(8)) {
                 ForEach(providerSelection.selectedProviders) { provider in
                     HStack(spacing: 3) {
                         Button {
                             activeProvider = provider
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: layoutMode.spacing(6)) {
                                 AIProviderIcon(provider: provider, size: 11)
                                 Text(provider.name)
                                     .font(.system(size: 11, weight: .semibold))
@@ -200,8 +203,8 @@ struct StatusPopoverView: View {
                                     ? StatusPopoverStyle.selectionColor
                                     : .primary.opacity(0.48)
                             )
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
+                            .padding(.horizontal, layoutMode.spacing(10))
+                            .padding(.vertical, layoutMode.spacing(7))
                             .background(
                                 activeProvider == provider
                                     ? .clear
@@ -220,7 +223,7 @@ struct StatusPopoverView: View {
                             .help("切换 Claude Code 账号")
                             .popover(isPresented: $showsQuickClaudeAccounts, arrowEdge: .bottom) {
                                 ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, management: false)
-                                    .padding(10).frame(width: 320)
+                                    .padding(layoutMode.spacing(10)).frame(width: 320)
                             }
                             Button(action: onOpenClaude) {
                                 Image(systemName: "arrow.up.forward.app")
@@ -261,7 +264,7 @@ struct StatusPopoverView: View {
             .sorted { ($0.endedAt ?? $0.updatedAt) > ($1.endedAt ?? $1.updatedAt) }
 
         return ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: layoutMode.spacing(10)) {
                 if !runningTasks.isEmpty {
                     taskGroupTitle(
                         "正在运行",
@@ -311,7 +314,7 @@ struct StatusPopoverView: View {
                 isExpanded.wrappedValue.toggle()
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: layoutMode.spacing(6)) {
                 Text(title)
                 Text("\(count)")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
@@ -337,7 +340,7 @@ struct StatusPopoverView: View {
     }
 
     private var emptyTaskState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: layoutMode.spacing(10)) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(.green.opacity(0.8))
@@ -372,7 +375,7 @@ struct StatusPopoverView: View {
     }
 
     private var providerPlaceholder: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: layoutMode.spacing(10)) {
             AIProviderIcon(provider: activeProvider, size: 26, weight: .medium)
                 .foregroundStyle(activeProvider.tint.opacity(0.75))
             Text("暂未接入 \(activeProvider.name)")
@@ -387,7 +390,7 @@ struct StatusPopoverView: View {
     }
 
     private var taskFooter: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: layoutMode.spacing(10)) {
             Text("深蹲 \(squatRunner.total) 次")
                 .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
                 .help("累计播放的完整深蹲次数；中途停止不计数，重启后保留")
@@ -410,12 +413,12 @@ struct StatusPopoverView: View {
 
     private var settingsSection: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: layoutMode.spacing(16)) {
                 themeSection
+                layoutSection
                 providerVisibilitySection
                 MenuBarIconSettingsView(
-                    squatRunner: squatRunner,
-                    layoutSettings: menuBarIconLayoutSettings
+                    squatRunner: squatRunner
                 )
 
                 taskPreviewRow
@@ -438,8 +441,41 @@ struct StatusPopoverView: View {
         .frame(maxHeight: .infinity)
     }
 
+    private var layoutSection: some View {
+        HStack(spacing: layoutMode.spacing(8)) {
+            Image(systemName: "rectangle.compress.vertical")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(StatusPopoverStyle.selectionColor)
+
+            Text("内容布局")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
+
+            Spacer(minLength: 4)
+
+            Picker(
+                "内容布局",
+                selection: Binding(
+                    get: { menuBarIconLayoutSettings.mode },
+                    set: { menuBarIconLayoutSettings.setMode($0) }
+                )
+            ) {
+                ForEach(MenuBarIconLayoutMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: 116)
+        }
+        .padding(.horizontal, layoutMode.spacing(9))
+        .frame(minHeight: 28)
+        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
+    }
+
     private var themeSection: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: layoutMode.spacing(10)) {
             Image(systemName: themeStore.mode == .light ? "sun.max.fill" : "moon.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(StatusPopoverStyle.selectionColor)
@@ -466,7 +502,7 @@ struct StatusPopoverView: View {
             .controlSize(.small)
             .frame(width: 126)
         }
-        .padding(10)
+        .padding(layoutMode.spacing(10))
         .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
@@ -483,7 +519,7 @@ struct StatusPopoverView: View {
         .buttonStyle(.plain)
         .help("切换账号")
         .popover(isPresented: $showsQuickAccounts, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: layoutMode.spacing(6)) {
                 HStack {
                     Spacer()
                     Button {
@@ -499,7 +535,7 @@ struct StatusPopoverView: View {
                 }
                 accountRows
             }
-            .padding(8)
+            .padding(layoutMode.spacing(8))
             .frame(width: 320)
         }
     }
@@ -519,7 +555,7 @@ struct StatusPopoverView: View {
     }
 
     private var accountSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(10)) {
             HStack {
                 Text("已登记账号").font(.system(size: 10)).foregroundStyle(.secondary)
                 Spacer()
@@ -579,7 +615,7 @@ struct StatusPopoverView: View {
         return Button {
             store.switchAccount(profile)
         } label: {
-        HStack(spacing: 8) {
+        HStack(spacing: layoutMode.spacing(8)) {
             accountAvatar(profile)
             VStack(alignment: .leading, spacing: 4) {
                 Text(profile.displayName).lineLimit(1).truncationMode(.middle)
@@ -606,7 +642,7 @@ struct StatusPopoverView: View {
             }
         }
         .font(.system(size: 11))
-        .padding(8)
+        .padding(layoutMode.spacing(8))
         .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
         .opacity(blocked ? 0.5 : 1)
         .contentShape(Rectangle())
@@ -622,7 +658,9 @@ struct StatusPopoverView: View {
                 Circle().stroke(.primary.opacity(0.10), lineWidth: 3)
                 if let window {
                     Circle().trim(from: 0, to: CGFloat(window.remainingPercent) / 100)
-                        .stroke(window.remainingPercent <= 10 ? Color.orange : StatusPopoverStyle.selectionColor,
+                        .stroke(Color(nsColor: QuotaProgressColor
+                            .forRemainingPercent(window.remainingPercent)
+                            .nsColor),
                                 style: StrokeStyle(lineWidth: 3, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                 }
@@ -638,13 +676,13 @@ struct StatusPopoverView: View {
     }
 
     private var providerVisibilitySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("客户端")
 
             VStack(spacing: 1) {
                 ForEach(AIProvider.primaryProviders + (showsAdditionalProviders ? AIProvider.additionalProviders : [])) { provider in
                     VStack(spacing: 0) {
-                        HStack(spacing: 8) {
+                        HStack(spacing: layoutMode.spacing(8)) {
                             AIProviderIcon(provider: provider, size: 16)
                                 .saturation(providerSelection.isSelected(provider) ? 1 : 0)
                                 .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
@@ -686,14 +724,14 @@ struct StatusPopoverView: View {
                             .tint(StatusPopoverStyle.selectionColor)
                             .disabled(providerSelection.isSelected(provider) && providerSelection.selectedProviders.count == 1)
                         }
-                        .padding(10)
+                        .padding(layoutMode.spacing(10))
                         if provider == .codex && showsAccounts && providerSelection.isSelected(provider) {
                             Divider()
-                            accountSection.padding(10)
+                            accountSection.padding(layoutMode.spacing(10))
                         }
                         if provider == .claude && showsClaudeAccounts && providerSelection.isSelected(provider) {
                             Divider()
-                            ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, onInteraction: onDirectionMenuPresented).padding(10)
+                            ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, onInteraction: onDirectionMenuPresented).padding(layoutMode.spacing(10))
                         }
                     }
                     .background(StatusPopoverStyle.tile)
@@ -715,7 +753,7 @@ struct StatusPopoverView: View {
     }
 
     private var taskPreviewRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: layoutMode.spacing(10)) {
             Text("任务预览")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.86))
@@ -741,12 +779,12 @@ struct StatusPopoverView: View {
             .frame(width: 142, height: 28)
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .padding(10)
+        .padding(layoutMode.spacing(10))
         .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var displayPositionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("显示位置")
             ScreenPositionPicker(position: animationSettings.displayPosition, onSelect: { position in
                 animationSettings.setDisplayPosition(position)
@@ -755,10 +793,10 @@ struct StatusPopoverView: View {
     }
 
     private var completionAnimationSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("完成动画")
 
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMode.spacing(8)) {
                 Text(selectedAnimationDisplayName)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.86))
@@ -778,15 +816,15 @@ struct StatusPopoverView: View {
                 .buttonStyle(.plain)
                 .help("预览当前动画")
             }
-            .padding(.leading, 10)
-            .padding(.trailing, 6)
+            .padding(.leading, layoutMode.spacing(10))
+            .padding(.trailing, layoutMode.spacing(6))
             .frame(height: 34)
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
 
             Text("In").font(.system(size: 11, weight: .semibold))
             LazyVGrid(
                 columns: Array(
-                    repeating: GridItem(.flexible(), spacing: 6),
+                    repeating: GridItem(.flexible(), spacing: layoutMode.spacing(6)),
                     count: 3
                 ),
                 spacing: 6
@@ -806,7 +844,7 @@ struct StatusPopoverView: View {
             }
 
             Text("Out").font(.system(size: 11, weight: .semibold))
-            HStack(spacing: 6) {
+            HStack(spacing: layoutMode.spacing(6)) {
                 ForEach(CompletionExitEffect.allCases) { effect in
                     AnimationSelectionRow(title: effect.title,
                         isSelected: animationSettings.exitEffect == effect,
@@ -842,7 +880,7 @@ struct StatusPopoverView: View {
                             .opacity(animationSettings.exitDirection == direction ? 1 : 0)
                     }
                     .font(.system(size: 11))
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, layoutMode.spacing(10))
                     .frame(width: 144, height: 28)
                     .background(hoveredExitDirection == direction ? StatusPopoverStyle.selectedTile : .clear, in: RoundedRectangle(cornerRadius: 5))
                     .foregroundStyle(hoveredExitDirection == direction ? StatusPopoverStyle.selectionColor : .primary.opacity(0.8))
@@ -863,7 +901,7 @@ struct StatusPopoverView: View {
     }
 
     private var timingSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("时间")
 
             NumericSliderRow(
@@ -890,7 +928,7 @@ struct StatusPopoverView: View {
                 suffix: "s"
             )
 
-            HStack(spacing: 10) {
+            HStack(spacing: layoutMode.spacing(10)) {
                 Text("当前 AI 应用在前台时不提醒")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.68))
@@ -912,10 +950,10 @@ struct StatusPopoverView: View {
     }
 
     private var updateSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("更新")
 
-            HStack(spacing: 10) {
+            HStack(spacing: layoutMode.spacing(10)) {
                 Image(systemName: "arrow.down.circle")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(StatusPopoverStyle.selectionColor)
@@ -938,16 +976,16 @@ struct StatusPopoverView: View {
                 .controlSize(.small)
                 .disabled(!updater.canCheckForUpdates)
             }
-            .padding(10)
+            .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
         }
     }
 
     private var limitRefreshSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("额度唤醒")
 
-            HStack(spacing: 10) {
+            HStack(spacing: layoutMode.spacing(10)) {
                 Image(systemName: "arrow.clockwise.circle")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(StatusPopoverStyle.selectionColor)
@@ -974,17 +1012,17 @@ struct StatusPopoverView: View {
                 .labelsHidden()
                 .toggleStyle(.switch)
             }
-            .padding(10)
+            .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
             .help("仅在没有运行中任务时，通过 Codex app-server 创建临时线程并发送：你好。请只回复一句简短的问候，不要执行任何操作。请求可能消耗额度。")
         }
     }
 
     private var launchAtLoginSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("启动")
 
-            HStack(spacing: 10) {
+            HStack(spacing: layoutMode.spacing(10)) {
                 Image(systemName: "power.circle")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(StatusPopoverStyle.selectionColor)
@@ -1016,7 +1054,7 @@ struct StatusPopoverView: View {
                 .toggleStyle(.switch)
                 .disabled(!launchAtLogin.isAvailable)
             }
-            .padding(10)
+            .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
             .onAppear { launchAtLogin.refresh() }
         }
@@ -1058,13 +1096,14 @@ struct StatusPopoverView: View {
 }
 
 private struct ProviderSelectionRow: View {
+    @Environment(\.popoverLayoutMode) private var layoutMode
     let provider: AIProvider
     let isSelected: Bool
     let onToggle: () -> Void
 
     var body: some View {
         Button(action: onToggle) {
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMode.spacing(8)) {
                 AIProviderIcon(provider: provider, size: 12)
                     .foregroundStyle(provider.tint.opacity(0.9))
                     .frame(width: 22, height: 22)
@@ -1091,7 +1130,7 @@ private struct ProviderSelectionRow: View {
                             : StatusPopoverStyle.primaryText.opacity(0.23)
                     )
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, layoutMode.spacing(8))
             .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
             .background(StatusPopoverStyle.tile)
             .contentShape(Rectangle())
@@ -1101,6 +1140,7 @@ private struct ProviderSelectionRow: View {
 }
 
 private struct AnimationSelectionRow: View {
+    @Environment(\.popoverLayoutMode) private var layoutMode
     let title: String
     let isSelected: Bool
     let onSelect: () -> Void
@@ -1108,7 +1148,7 @@ private struct AnimationSelectionRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 8) {
+            HStack(spacing: layoutMode.spacing(8)) {
                 Circle()
                     .fill(
                         isSelected
@@ -1129,7 +1169,7 @@ private struct AnimationSelectionRow: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 9)
+            .padding(.horizontal, layoutMode.spacing(9))
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .background(
                 isSelected
@@ -1156,6 +1196,7 @@ private struct RunningTaskIndicator: View {
 }
 
 private struct NumericSliderRow: View {
+    @Environment(\.popoverLayoutMode) private var layoutMode
     let title: String
     @Binding var value: Double
     let range: ClosedRange<Double>
@@ -1186,7 +1227,7 @@ private struct NumericSliderRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: layoutMode.spacing(10)) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.68))
@@ -1217,7 +1258,7 @@ private struct NumericSliderRow: View {
             }
             .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.82))
             .frame(width: 55, height: 24)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, layoutMode.spacing(6))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .frame(height: 30)
@@ -1243,6 +1284,7 @@ private struct NumericSliderRow: View {
 }
 
 private struct TaskRow: View {
+    @Environment(\.popoverLayoutMode) private var layoutMode
     let task: CodexTask
     let onOpen: (CodexTask) -> Void
 
@@ -1250,7 +1292,7 @@ private struct TaskRow: View {
         Button {
             onOpen(task)
         } label: {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: layoutMode.spacing(8)) {
                 Group {
                     if task.isRunning {
                         RunningTaskIndicator()
@@ -1264,7 +1306,7 @@ private struct TaskRow: View {
                 .padding(.top, 1)
 
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: layoutMode.spacing(6)) {
                         Text(task.threadName)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(.primary.opacity(0.88))
@@ -1309,8 +1351,8 @@ private struct TaskRow: View {
                     .foregroundStyle(.primary.opacity(0.28))
                     .padding(.top, 2)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, layoutMode.spacing(10))
+            .padding(.vertical, layoutMode.spacing(8))
             .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
             .contentShape(Rectangle())
         }
