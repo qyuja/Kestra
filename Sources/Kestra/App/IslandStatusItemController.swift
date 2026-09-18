@@ -28,6 +28,9 @@ final class IslandStatusItemController: NSObject {
 
     private var trackingArea: NSTrackingArea?
     private var popover: NSPopover?
+    private var hoverPanel: NSPanel?
+    private var isHoverPanelHovering = false
+    private var isPopoverHovering = false
     private var closeWorkItem: DispatchWorkItem?
     private var isDirectionMenuPresented = false
     private var holdsPopoverAfterMenu = false
@@ -153,7 +156,9 @@ final class IslandStatusItemController: NSObject {
         button.imageScaling = .scaleNone
         button.target = self
         button.action = #selector(statusItemClicked)
-        button.toolTip = makeToolTip()
+        button.toolTip = Bundle.main.bundleIdentifier == "com.kiannest.kestra.dev"
+            ? "Kestra Dev · 开发版（设置独立）\n" + makeToolTip()
+            : makeToolTip()
         button.setAccessibilityLabel(
             makeAccessibilityLabel()
         )
@@ -374,9 +379,9 @@ final class IslandStatusItemController: NSObject {
     }
 
     private func installTrackingArea(on button: NSStatusBarButton) {
-        if let trackingArea {
-            button.removeTrackingArea(trackingArea)
-        }
+        // inVisibleRect follows button resizing. Reinstalling on every task
+        // refresh can lose the pointer's existing enter/exit state.
+        guard trackingArea == nil else { return }
 
         let trackingArea = NSTrackingArea(
             rect: button.bounds,
@@ -391,7 +396,7 @@ final class IslandStatusItemController: NSObject {
     func mouseEntered(with event: NSEvent) {
         isButtonHovering = true
         closeWorkItem?.cancel()
-        showPopoverIfNeeded()
+        showHoverPanel()
     }
 
     func mouseExited(with event: NSEvent) {
@@ -400,6 +405,7 @@ final class IslandStatusItemController: NSObject {
     }
 
     @objc private func statusItemClicked() {
+        closeHoverPanel()
         if popover?.isShown == true {
             closePopover()
         } else {
@@ -480,9 +486,11 @@ final class IslandStatusItemController: NSObject {
 
     private func updatePopoverAppearance() {
         popover?.appearance = themeAppearance
+        hoverPanel?.appearance = themeAppearance
     }
 
     private func setPopoverHovering(_ isHovered: Bool) {
+        isPopoverHovering = isHovered
         if isHovered {
             closeWorkItem?.cancel()
             if !isDirectionMenuPresented { holdsPopoverAfterMenu = false }
@@ -493,7 +501,8 @@ final class IslandStatusItemController: NSObject {
 
     private func schedulePopoverClose() {
         closeWorkItem?.cancel()
-        guard !isButtonHovering, !isDirectionMenuPresented, !holdsPopoverAfterMenu else { return }
+        guard !isButtonHovering, !isHoverPanelHovering, !isPopoverHovering,
+              !isDirectionMenuPresented, !holdsPopoverAfterMenu else { return }
 
         let workItem = DispatchWorkItem { [weak self] in
             MainActor.assumeIsolated {
@@ -506,9 +515,54 @@ final class IslandStatusItemController: NSObject {
 
     private func closePopover() {
         closeWorkItem?.cancel()
+        closeHoverPanel()
+        isPopoverHovering = false
         isDirectionMenuPresented = false
         holdsPopoverAfterMenu = false
         popover?.performClose(nil)
+    }
+
+    private func showHoverPanel() {
+        guard popover?.isShown != true, hoverPanel == nil,
+              let button = statusItem.button, let window = button.window,
+              let screen = window.screen else { return }
+        let visible = screen.visibleFrame.insetBy(dx: 8, dy: 8)
+        let size = NSSize(width: min(540, visible.width), height: min(340, visible.height))
+        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        let origin = NSPoint(
+            x: min(max(anchor.midX - size.width / 2, visible.minX), visible.maxX - size.width),
+            y: max(visible.minY, min(anchor.minY - size.height - 4, visible.maxY - size.height))
+        )
+        let panel = NSPanel(contentRect: NSRect(origin: origin, size: size),
+                            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.hidesOnDeactivate = false
+        panel.level = .popUpMenu
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.appearance = themeAppearance
+        panel.contentViewController = NSHostingController(rootView: StatusHoverView(
+            store: store, providers: providerSelection, theme: themeStore,
+            width: size.width, height: size.height,
+            onHover: { [weak self] inside in
+                guard let self else { return }
+                self.isHoverPanelHovering = inside
+                if inside { self.closeWorkItem?.cancel() }
+                else { self.schedulePopoverClose() }
+            },
+            onOpenTask: { [weak self] task in self?.launchTask(task) }
+        ))
+        hoverPanel = panel
+        panel.setFrame(NSRect(origin: origin, size: size), display: false)
+        panel.orderFrontRegardless()
+    }
+
+    private func closeHoverPanel() {
+        hoverPanel?.orderOut(nil)
+        hoverPanel = nil
+        isHoverPanelHovering = false
     }
 
     private func launchTask(_ task: CodexTask) {

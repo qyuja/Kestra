@@ -34,6 +34,29 @@ final class CodexRestartSwitcher {
     }
 
     func sharedProfile(of app: NSRunningApplication, expectedHome: URL) async throws -> CodexSharedProfile {
+        try await Self.waitForSharedProfile {
+            guard !app.isTerminated else { throw SwitchError("Codex 已退出，无法确认数据目录") }
+            return try await self.probeSharedProfile(of: app, expectedHome: expectedHome)
+        }
+    }
+
+    // Retry missing startup evidence, never a conflicting data directory.
+    static func waitForSharedProfile(
+        attempts: Int = 6,
+        retryDelay: Duration = .milliseconds(500),
+        probe: () async throws -> CodexSharedProfile
+    ) async throws -> CodexSharedProfile {
+        for attempt in 0..<attempts {
+            do { return try await probe() }
+            catch is CodexSharedProfile.ProbeError {
+                if attempt == attempts - 1 { throw CodexSharedProfile.ProbeError.notReady }
+                try await Task.sleep(for: retryDelay)
+            }
+        }
+        throw CodexSharedProfile.ProbeError.notReady
+    }
+
+    private func probeSharedProfile(of app: NSRunningApplication, expectedHome: URL) async throws -> CodexSharedProfile {
         let pid = app.processIdentifier
         let paths = try await Task.detached(priority: .utility) {
             let process = Process()

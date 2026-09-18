@@ -356,6 +356,14 @@ final class CodexTaskStore: ObservableObject {
                 // Never close a newly running app again without another idle check.
                 currentAccountID = nil
                 currentAccountEmail = nil
+                do {
+                    let actualIdentity = try await restartSwitcher.identity(at: activeHome)
+                    currentAccountID = accountProfiles.first { actualIdentity.matches($0) }?.id
+                    currentAccountEmail = actualIdentity.email
+                } catch {
+                    throw SwitchError("Codex 已重启，但目录或账号校验未完成；将后台重试账号识别。请勿重复切换。")
+                }
+                throw SwitchError("Codex 已重启，已按实际登录身份恢复账号显示，但目录或账号校验未全部通过。请确认 Codex 中的账号后再操作。")
             }
             throw error
         }
@@ -530,7 +538,34 @@ final class CodexTaskStore: ObservableObject {
         refreshTasks()
     }
 
+    private var isReconcilingAccount = false
+    private var lastAccountReconciliation: Date = .distantPast
+
+    private func reconcileMissingAccount() {
+        guard currentAccountID == nil, !accountProfiles.isEmpty,
+              switchingAccountID == nil, !isRegisteringAccount, !isAddingAccount,
+              !isReconcilingAccount,
+              Date.now.timeIntervalSince(lastAccountReconciliation) >= 30 else { return }
+        isReconcilingAccount = true
+        lastAccountReconciliation = .now
+        let generation = monitoringGeneration
+        Task { @MainActor in
+            defer { isReconcilingAccount = false }
+            do {
+                let identity = try await restartSwitcher.identity(at: appServerClient.codexHome)
+                guard generation == monitoringGeneration, switchingAccountID == nil else { return }
+                currentAccountID = accountProfiles.first { identity.matches($0) }?.id
+                currentAccountEmail = identity.email
+                refreshAccountMonitoring(refreshImmediately: false)
+            } catch {
+                guard generation == monitoringGeneration, switchingAccountID == nil else { return }
+                accountMessage = "当前账号识别暂时失败，将后台重试：\(error.localizedDescription)"
+            }
+        }
+    }
+
     private func refreshTasks() {
+        reconcileMissingAccount()
         guard !isRefreshing else { return }
         isRefreshing = true
         let generation = monitoringGeneration

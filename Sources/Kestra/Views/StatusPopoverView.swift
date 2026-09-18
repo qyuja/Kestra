@@ -120,7 +120,7 @@ struct StatusPopoverView: View {
         HStack(spacing: layoutMode.spacing(10)) {
             AppBrandIcon(size: 32, weight: .bold)
 
-            Text("Kestra")
+            Text(Bundle.main.bundleIdentifier == "com.kiannest.kestra.dev" ? "Kestra Dev" : "Kestra")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(StatusPopoverStyle.primaryText)
 
