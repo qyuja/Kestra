@@ -25,25 +25,16 @@ struct CodexAccountUsage: Sendable {
                   let day = components.day,
                   let hour = components.hour,
                   let minute = components.minute else { return nil }
-            if minutes.map({ $0 >= 1440 }) ?? true {
-                return String(format: "%02d-%02d %02d-%02d", month, day, hour, minute)
-            }
-            return String(format: "%02d-%02d", hour, minute)
+            return String(format: "%02d-%02d %02d:%02d", month, day, hour, minute)
         }
 
         var resetLabel: String? {
             resetTimeText.map { "reset at : \($0)" }
         }
 
-        /// The hover panel follows the compact reference style with a colon in the time.
+        /// The hover panel uses the same compact time format as the account panel.
         var hoverResetTimeText: String? {
-            guard let resetTimeText else { return nil }
-            guard minutes.map({ $0 >= 1440 }) ?? true else {
-                return resetTimeText.replacingOccurrences(of: "-", with: ":")
-            }
-            let parts = resetTimeText.split(separator: " ", maxSplits: 1).map(String.init)
-            guard parts.count == 2 else { return resetTimeText }
-            return "\(parts[0]) \(parts[1].replacingOccurrences(of: "-", with: ":"))"
+            resetTimeText
         }
     }
 

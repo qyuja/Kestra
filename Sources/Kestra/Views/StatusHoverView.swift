@@ -90,24 +90,26 @@ struct StatusHoverView: View {
         let usage = store.accountQuotas[accountID]?.usage,
         !usage.displayWindows.isEmpty
       {
-        HStack(spacing: 10) {
-          AIProviderIcon(provider: .codex, size: 18)
-          ForEach(Array(usage.displayWindows.enumerated()), id: \.offset) { _, window in
-            VStack(alignment: .leading, spacing: 5) {
-              HStack(spacing: 6) {
-                Text(window.title == "7d" ? "周剩余" : "\(window.title)剩余")
-                Spacer()
-                Text("\(window.remainingPercent)%").monospacedDigit()
-                Text("·").foregroundStyle(.tertiary)
-                Text(window.hoverResetTimeText ?? "—")
-                  .monospacedDigit()
+        HStack(alignment: .top, spacing: 6) {
+          AIProviderIcon(provider: .codex, size: 16)
+          VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(usage.displayWindows.enumerated()), id: \.offset) { _, window in
+              VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                  Text(window.title == "7d" ? "周剩余" : "\(window.title)剩余")
+                  Spacer()
+                  Text("\(window.remainingPercent)%").monospacedDigit()
+                  Text("·").foregroundStyle(.tertiary)
+                  Text(window.hoverResetTimeText ?? "—")
+                    .monospacedDigit()
+                }
+                .font(.system(size: 9, weight: .medium))
+                ProgressView(value: Double(window.remainingPercent), total: 100)
+                  .tint(
+                    Color(
+                      nsColor: QuotaProgressColor.forRemainingPercent(window.remainingPercent).nsColor
+                    ))
               }
-              .font(.system(size: 10, weight: .medium))
-              ProgressView(value: Double(window.remainingPercent), total: 100)
-                .tint(
-                  Color(
-                    nsColor: QuotaProgressColor.forRemainingPercent(window.remainingPercent).nsColor
-                  ))
             }
           }
         }

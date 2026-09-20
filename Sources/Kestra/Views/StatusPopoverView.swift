@@ -647,8 +647,10 @@ struct StatusPopoverView: View {
                 ProgressView().controlSize(.small)
             }
             if let usage {
-                ForEach(Array(usage.displayWindows.enumerated()), id: \.offset) { _, window in
-                    quotaRing(window, fallback: "额度", error: nil)
+                HStack(spacing: layoutMode.spacing(2)) {
+                    ForEach(Array(usage.displayWindows.enumerated()), id: \.offset) { _, window in
+                        quotaRing(window, fallback: "额度", error: nil)
+                    }
                 }
             } else {
                 quotaRing(nil, fallback: "额度", error: quota?.error)
@@ -666,7 +668,9 @@ struct StatusPopoverView: View {
     }
 
     private func quotaRing(_ window: CodexAccountUsage.Window?, fallback: String, error: String?) -> some View {
-        VStack(spacing: 3) {
+        let resetText = window?.resetTimeText ?? "—"
+
+        return VStack(spacing: 2) {
             ZStack {
                 Circle().stroke(.primary.opacity(0.10), lineWidth: 3)
                 if let window {
@@ -681,16 +685,9 @@ struct StatusPopoverView: View {
                     .font(.system(size: 9, weight: .semibold, design: .rounded)).monospacedDigit()
             }
             .frame(width: 29, height: 29)
-            HStack(spacing: 3) {
-                Text(window?.resetTimeText ?? "—")
-            }
-            .font(.system(size: 8, weight: .medium, design: .monospaced))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.48)
-            .truncationMode(.tail)
+            quotaResetLabel(resetText)
         }
-        .frame(width: 76)
+        .frame(width: 48)
         .help(error ?? window.map {
             let reset = $0.resetLabel.map { "，\($0)" } ?? ""
             return "\($0.title) 剩余 \($0.remainingPercent)%\(reset)"
@@ -700,6 +697,15 @@ struct StatusPopoverView: View {
             let reset = $0.resetLabel.map { "，\($0)" } ?? ""
             return "\($0.title) 剩余百分之 \($0.remainingPercent)\(reset)"
         } ?? "\(fallback)额度未获取")
+    }
+
+    private func quotaResetLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 8, weight: .medium, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.48)
+            .truncationMode(.tail)
     }
 
     private var providerVisibilitySection: some View {

@@ -130,9 +130,9 @@ final class TaskBridgeTests: XCTestCase {
             remainingPercent: 80, minutes: 10080, resetsAt: date
         )
 
-        XCTAssertEqual(fiveHour.resetLabel, "reset at : 14-05")
-        XCTAssertEqual(weekly.resetLabel, "reset at : 09-20 14-05")
-        XCTAssertEqual(fiveHour.hoverResetTimeText, "14:05")
+        XCTAssertEqual(fiveHour.resetLabel, "reset at : 09-20 14:05")
+        XCTAssertEqual(weekly.resetLabel, "reset at : 09-20 14:05")
+        XCTAssertEqual(fiveHour.hoverResetTimeText, "09-20 14:05")
         XCTAssertEqual(weekly.hoverResetTimeText, "09-20 14:05")
     }
 
