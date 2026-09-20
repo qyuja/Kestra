@@ -53,6 +53,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // This is intentionally an accessory-only app. The status item popover
         // owns the task list, provider selection, settings, and actions.
         NSApp.setActivationPolicy(.accessory)
+        updater.canRestart = { [weak self] in
+            guard let self else { return false }
+            return self.taskStore.switchingAccountID == nil
+        }
         updater.start()
 
         let taskBridgeStore = taskBridgeStore

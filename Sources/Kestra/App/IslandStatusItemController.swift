@@ -32,6 +32,7 @@ final class IslandStatusItemController: NSObject {
     private var isHoverPanelHovering = false
     private var isPopoverHovering = false
     private var closeWorkItem: DispatchWorkItem?
+    private var hoverShowWorkItem: DispatchWorkItem?
     private var isDirectionMenuPresented = false
     private var holdsPopoverAfterMenu = false
     private var isButtonHovering = false
@@ -393,14 +394,27 @@ final class IslandStatusItemController: NSObject {
         self.trackingArea = trackingArea
     }
 
-    func mouseEntered(with event: NSEvent) {
+    // NSObject does not inherit NSResponder's Objective-C selector mapping.
+    @objc(mouseEntered:) func mouseEntered(with event: NSEvent) {
         isButtonHovering = true
         closeWorkItem?.cancel()
-        showHoverPanel()
+        hoverShowWorkItem?.cancel()
+        guard hoverPanel == nil, popover?.isShown != true else { return }
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.isButtonHovering, self.statusItem.isVisible else { return }
+                self.hoverShowWorkItem = nil
+                self.showHoverPanel()
+            }
+        }
+        hoverShowWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: workItem)
     }
 
-    func mouseExited(with event: NSEvent) {
+    @objc(mouseExited:) func mouseExited(with event: NSEvent) {
         isButtonHovering = false
+        hoverShowWorkItem?.cancel()
+        hoverShowWorkItem = nil
         schedulePopoverClose()
     }
 
@@ -510,7 +524,9 @@ final class IslandStatusItemController: NSObject {
             }
         }
         closeWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.28, execute: workItem)
+        // The corner panel can be farther from the status item; allow pointer travel.
+        let delay = hoverPanel == nil ? 0.28 : 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     private func closePopover() {
@@ -527,11 +543,11 @@ final class IslandStatusItemController: NSObject {
               let button = statusItem.button, let window = button.window,
               let screen = window.screen else { return }
         let visible = screen.visibleFrame.insetBy(dx: 8, dy: 8)
-        let size = NSSize(width: min(540, visible.width), height: min(340, visible.height))
-        let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
+        // Two 130pt cards, an 8pt gap, and 12pt padding on either side.
+        let size = NSSize(width: min(292, visible.width), height: min(160, visible.height))
         let origin = NSPoint(
-            x: min(max(anchor.midX - size.width / 2, visible.minX), visible.maxX - size.width),
-            y: max(visible.minY, min(anchor.minY - size.height - 4, visible.maxY - size.height))
+            x: visible.maxX - size.width,
+            y: visible.maxY - size.height
         )
         let panel = NSPanel(contentRect: NSRect(origin: origin, size: size),
                             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -545,7 +561,13 @@ final class IslandStatusItemController: NSObject {
         panel.appearance = themeAppearance
         panel.contentViewController = NSHostingController(rootView: StatusHoverView(
             store: store, providers: providerSelection, theme: themeStore,
-            width: size.width, height: size.height,
+            width: size.width, maxHeight: visible.height,
+            onHeightChange: { [weak self, weak panel] height in
+                guard let panel, self?.hoverPanel === panel else { return }
+                let frame = NSRect(x: visible.maxX - size.width, y: visible.maxY - height,
+                                   width: size.width, height: height)
+                if panel.frame != frame { panel.setFrame(frame, display: true) }
+            },
             onHover: { [weak self] inside in
                 guard let self else { return }
                 self.isHoverPanelHovering = inside
@@ -560,6 +582,8 @@ final class IslandStatusItemController: NSObject {
     }
 
     private func closeHoverPanel() {
+        hoverShowWorkItem?.cancel()
+        hoverShowWorkItem = nil
         hoverPanel?.orderOut(nil)
         hoverPanel = nil
         isHoverPanelHovering = false

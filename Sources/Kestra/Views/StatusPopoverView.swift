@@ -120,6 +120,19 @@ struct StatusPopoverView: View {
         HStack(spacing: layoutMode.spacing(10)) {
             AppBrandIcon(size: 32, weight: .bold)
 
+            Button(action: updater.checkForUpdates) {
+                Image(systemName: updater.isInstalling ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(updater.availableVersion == nil ? StatusPopoverStyle.secondaryText : StatusPopoverStyle.selectionColor)
+                    .frame(width: 28, height: 28)
+                    .background(.primary.opacity(0.08), in: Circle())
+                    .symbolEffect(.rotate, options: .repeat(.continuous), isActive: updater.isInstalling)
+            }
+            .buttonStyle(.plain)
+            .disabled(!updater.canCheckForUpdates || updater.isInstalling || store.switchingAccountID != nil)
+            .help(updater.statusText)
+            .accessibilityLabel("检查更新并重启 Kestra")
+
             Text(Bundle.main.bundleIdentifier == "com.kiannest.kestra.dev" ? "Kestra Dev" : "Kestra")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(StatusPopoverStyle.primaryText)
@@ -959,22 +972,21 @@ struct StatusPopoverView: View {
                     .foregroundStyle(StatusPopoverStyle.selectionColor)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("自动更新")
+                    Text("自动检查新版本")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(StatusPopoverStyle.primaryText)
-                    Text(updater.isConfigured ? "后台自动检查，安装前会确认" : "当前构建未配置更新源")
+                    Text(updater.statusText)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(StatusPopoverStyle.secondaryText)
                 }
 
                 Spacer(minLength: 8)
 
-                Button("检查更新") {
-                    updater.checkForUpdates()
-                }
-                .buttonStyle(.bordered)
+                Toggle("自动检查新版本", isOn: $updater.automaticallyChecksForUpdates)
+                .labelsHidden()
+                .toggleStyle(.switch)
                 .controlSize(.small)
-                .disabled(!updater.canCheckForUpdates)
+                .disabled(!updater.isConfigured)
             }
             .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
