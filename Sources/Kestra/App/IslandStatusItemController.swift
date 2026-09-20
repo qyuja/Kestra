@@ -408,7 +408,7 @@ final class IslandStatusItemController: NSObject {
             }
         }
         hoverShowWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
 
     @objc(mouseExited:) func mouseExited(with event: NSEvent) {

@@ -120,6 +120,10 @@ struct StatusPopoverView: View {
         HStack(spacing: layoutMode.spacing(10)) {
             AppBrandIcon(size: 32, weight: .bold)
 
+            Text(Bundle.main.bundleIdentifier == "com.kiannest.kestra.dev" ? "Kestra Dev" : "Kestra")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
+
             Button(action: updater.checkForUpdates) {
                 Image(systemName: updater.isInstalling ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
                     .font(.system(size: 14, weight: .semibold))
@@ -132,10 +136,6 @@ struct StatusPopoverView: View {
             .disabled(!updater.canCheckForUpdates || updater.isInstalling || store.switchingAccountID != nil)
             .help(updater.statusText)
             .accessibilityLabel("检查更新并重启 Kestra")
-
-            Text(Bundle.main.bundleIdentifier == "com.kiannest.kestra.dev" ? "Kestra Dev" : "Kestra")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(StatusPopoverStyle.primaryText)
 
             Spacer(minLength: 8)
 
@@ -681,11 +681,25 @@ struct StatusPopoverView: View {
                     .font(.system(size: 9, weight: .semibold, design: .rounded)).monospacedDigit()
             }
             .frame(width: 29, height: 29)
+            HStack(spacing: 3) {
+                Text(window?.resetTimeText ?? "—")
+            }
+            .font(.system(size: 8, weight: .medium, design: .monospaced))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.48)
+            .truncationMode(.tail)
         }
-        .frame(width: 34)
-        .help(error ?? window.map { "\($0.title) 剩余 \($0.remainingPercent)%" } ?? "额度未获取")
+        .frame(width: 76)
+        .help(error ?? window.map {
+            let reset = $0.resetLabel.map { "，\($0)" } ?? ""
+            return "\($0.title) 剩余 \($0.remainingPercent)%\(reset)"
+        } ?? "额度未获取")
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(window.map { "\($0.title) 剩余百分之 \($0.remainingPercent)" } ?? "\(fallback)额度未获取")
+        .accessibilityLabel(window.map {
+            let reset = $0.resetLabel.map { "，\($0)" } ?? ""
+            return "\($0.title) 剩余百分之 \($0.remainingPercent)\(reset)"
+        } ?? "\(fallback)额度未获取")
     }
 
     private var providerVisibilitySection: some View {

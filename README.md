@@ -69,6 +69,18 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
+也可以使用发布脚本。脚本要求工作树已经提交干净，会先运行 Swift 和协议适配器测试，再推送当前分支并创建、推送版本 tag：
+
+```bash
+./script/push_release.sh 0.1.14
+```
+
+正式推送前可以先预检，不会创建或推送 tag：
+
+```bash
+./script/push_release.sh --dry-run 0.1.14
+```
+
 推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `Kestra-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
 
 Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeeper。要让其他 Mac 直接双击打开，需要在仓库 Secrets 配置 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_KEYCHAIN_PASSWORD`，以及 notarization 所需的 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD`。

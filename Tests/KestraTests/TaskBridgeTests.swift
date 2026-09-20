@@ -119,6 +119,23 @@ final class TaskBridgeTests: XCTestCase {
         XCTAssertEqual(usage.primary?.resetsAt, Date(timeIntervalSince1970: 1_700_000_000))
     }
 
+    func testResetLabelsUseWindowSpecificCompactFormats() {
+        let date = Calendar.current.date(
+            from: DateComponents(year: 2026, month: 9, day: 20, hour: 14, minute: 5)
+        )!
+        let fiveHour = CodexAccountUsage.Window(
+            remainingPercent: 80, minutes: 300, resetsAt: date
+        )
+        let weekly = CodexAccountUsage.Window(
+            remainingPercent: 80, minutes: 10080, resetsAt: date
+        )
+
+        XCTAssertEqual(fiveHour.resetLabel, "reset at : 14-05")
+        XCTAssertEqual(weekly.resetLabel, "reset at : 09-20 14-05")
+        XCTAssertEqual(fiveHour.hoverResetTimeText, "14:05")
+        XCTAssertEqual(weekly.hoverResetTimeText, "09-20 14:05")
+    }
+
     func testSwitchRequiresExpectedWorkspaceAndEmail() {
         let profile = CodexAccountProfile(
             id: "test", displayName: "A", codexHomePath: URL(fileURLWithPath: "/tmp/example"),

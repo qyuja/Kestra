@@ -94,12 +94,15 @@ struct StatusHoverView: View {
           AIProviderIcon(provider: .codex, size: 18)
           ForEach(Array(usage.displayWindows.enumerated()), id: \.offset) { _, window in
             VStack(alignment: .leading, spacing: 5) {
-              HStack {
-                Text(window.title)
+              HStack(spacing: 6) {
+                Text(window.title == "7d" ? "周剩余" : "\(window.title)剩余")
                 Spacer()
                 Text("\(window.remainingPercent)%").monospacedDigit()
+                Text("·").foregroundStyle(.tertiary)
+                Text(window.hoverResetTimeText ?? "—")
+                  .monospacedDigit()
               }
-              .font(.caption)
+              .font(.system(size: 10, weight: .medium))
               ProgressView(value: Double(window.remainingPercent), total: 100)
                 .tint(
                   Color(
@@ -116,6 +119,7 @@ struct StatusHoverView: View {
       Text("当前客户端暂无额度数据").font(.caption).foregroundStyle(.secondary)
     }
   }
+
 }
 
 // Preserve fixed card widths while wrapping rows without stretching the cards.
