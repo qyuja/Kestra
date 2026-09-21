@@ -20,6 +20,7 @@ final class CodexAppServerClient {
     private var process: Process?
     private var inputPipe: Pipe?
     private var outputPipe: Pipe?
+    private var errorPipe: Pipe?
     private var outputBuffer = Data()
     private var pendingRequests: [Int: PendingRequest] = [:]
     private var nextRequestID = 1
@@ -42,6 +43,25 @@ final class CodexAppServerClient {
     private var greetingWorkingDirectory: URL?
     private var greetingMCPServerNames = [String]()
     private var greetingMCPServerCursor: String?
+
+    private static let activityNotificationMethods: Set<String> = [
+        "thread/archived",
+        "thread/closed",
+        "thread/compacted",
+        "thread/deleted",
+        "thread/goal/cleared",
+        "thread/goal/updated",
+        "thread/started",
+        "thread/name/updated",
+        "thread/project/updated",
+        "thread/queue/changed",
+        "thread/reverted",
+        "thread/settings/updated",
+        "thread/status/changed",
+        "thread/unarchived",
+        "turn/started",
+        "turn/completed",
+    ]
 
     private static let greetingInstructions = "这是一次自动额度唤醒请求。不要调用任何工具，不要读取或修改文件，不要访问网络，也不要执行任何操作，只回复一句简短问候。"
 
@@ -313,8 +333,14 @@ final class CodexAppServerClient {
         }
     }
     private var queuedThreadListCompletion: ThreadListCompletion?
+    private var queuedThreadListIncludesHistory = false
     private var activeThreadListCompletion: ThreadListCompletion?
+    private var activeThreadListIncludesHistory = false
     private var threadListAccumulator: [CodexThreadRecord] = []
+    // Kestra shows active tasks and a short recent list. Fetching every
+    // historical page on each poll makes the app-server and JSON parser scale
+    // with the lifetime of the account rather than the visible UI.
+    private let visibleThreadListLimit = 100
 
     var onConnectionChanged: ((Bool) -> Void)?
     var onError: ((String) -> Void)?
@@ -361,6 +387,7 @@ final class CodexAppServerClient {
         self.process = process
         self.inputPipe = inputPipe
         self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
         isInitialized = false
         onConnectionChanged?(true)
 
@@ -379,7 +406,13 @@ final class CodexAppServerClient {
         // Codex can write startup diagnostics to stderr. Drain the pipe so a
         // noisy configuration cannot block the JSON-RPC process.
         errorPipe.fileHandleForReading.readabilityHandler = { handle in
-            _ = handle.availableData
+            let data = handle.availableData
+            if data.isEmpty {
+                // EOF remains readable. Removing the handler here prevents
+                // FileHandle from repeatedly waking a monitoring queue after
+                // the app-server has exited.
+                handle.readabilityHandler = nil
+            }
         }
 
         sendInitialize()
@@ -393,20 +426,27 @@ final class CodexAppServerClient {
         finishAccount(.failure(CodexAppServerError.notRunning))
         finishGreeting(.failure(CodexAppServerError.notRunning))
         outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
         process?.terminationHandler = nil
         process?.terminate()
         process = nil
         inputPipe = nil
         outputPipe = nil
+        errorPipe = nil
         outputBuffer.removeAll(keepingCapacity: false)
         pendingRequests.removeAll()
         queuedThreadListCompletion = nil
+        queuedThreadListIncludesHistory = false
         activeThreadListCompletion = nil
+        activeThreadListIncludesHistory = false
         isInitialized = false
         onConnectionChanged?(false)
     }
 
-    func requestThreadList(completion: @escaping ThreadListCompletion) {
+    func requestThreadList(
+        includeHistory: Bool = true,
+        completion: @escaping ThreadListCompletion
+    ) {
         guard process?.isRunning == true else {
             completion(.failure(CodexAppServerError.notRunning))
             return
@@ -414,15 +454,17 @@ final class CodexAppServerClient {
 
         guard isInitialized else {
             queuedThreadListCompletion = completion
+            queuedThreadListIncludesHistory = includeHistory
             return
         }
 
         guard activeThreadListCompletion == nil else {
             queuedThreadListCompletion = completion
+            queuedThreadListIncludesHistory = queuedThreadListIncludesHistory || includeHistory
             return
         }
 
-        beginThreadList(completion: completion)
+        beginThreadList(includeHistory: includeHistory, completion: completion)
     }
 
     private func sendInitialize() {
@@ -446,8 +488,12 @@ final class CodexAppServerClient {
         ])
     }
 
-    private func beginThreadList(completion: @escaping ThreadListCompletion) {
+    private func beginThreadList(
+        includeHistory: Bool,
+        completion: @escaping ThreadListCompletion
+    ) {
         activeThreadListCompletion = completion
+        activeThreadListIncludesHistory = includeHistory
         threadListAccumulator.removeAll(keepingCapacity: true)
         sendThreadListPage(cursor: nil)
     }
@@ -455,7 +501,7 @@ final class CodexAppServerClient {
     private func sendThreadListPage(cursor: String?) {
         var params: [String: Any] = [
             "archived": false,
-            "limit": 100,
+            "limit": visibleThreadListLimit,
             "sortKey": "updated_at",
             "sortDirection": "desc",
             "useStateDbOnly": true
@@ -537,14 +583,19 @@ final class CodexAppServerClient {
                     finishGreeting(.failure(CodexAppServerError.server(message)))
                 }
             }
-            if method.hasPrefix("thread/") || method.hasPrefix("turn/") {
+            if Self.activityNotificationMethods.contains(method) {
                 onActivityChanged?()
 
                 if let queuedThreadListCompletion,
                    activeThreadListCompletion == nil,
                    isInitialized {
                     self.queuedThreadListCompletion = nil
-                    beginThreadList(completion: queuedThreadListCompletion)
+                    let includeHistory = self.queuedThreadListIncludesHistory
+                    self.queuedThreadListIncludesHistory = false
+                    beginThreadList(
+                        includeHistory: includeHistory,
+                        completion: queuedThreadListCompletion
+                    )
                 }
             }
             return
@@ -583,7 +634,12 @@ final class CodexAppServerClient {
             }
             if let queuedThreadListCompletion {
                 self.queuedThreadListCompletion = nil
-                beginThreadList(completion: queuedThreadListCompletion)
+                let includeHistory = self.queuedThreadListIncludesHistory
+                self.queuedThreadListIncludesHistory = false
+                beginThreadList(
+                    includeHistory: includeHistory,
+                    completion: queuedThreadListCompletion
+                )
             }
 
         case .threadList:
@@ -642,18 +698,29 @@ final class CodexAppServerClient {
             threadListAccumulator.append(contentsOf: rawThreads.compactMap(parseThread))
         }
 
-        if let nextCursor = result["nextCursor"] as? String, !nextCursor.isEmpty {
+        if activeThreadListIncludesHistory,
+           let nextCursor = result["nextCursor"] as? String,
+           !nextCursor.isEmpty {
             sendThreadListPage(cursor: nextCursor)
             return
         }
 
+        // Normal monitoring only needs the first page. A periodic full scan
+        // is requested by CodexTaskStore so old but still-running threads are
+        // eventually rediscovered without parsing the whole history every 2s.
         let completion = activeThreadListCompletion
         activeThreadListCompletion = nil
+        activeThreadListIncludesHistory = false
         completion?(.success(threadListAccumulator))
 
         if let queuedThreadListCompletion {
             self.queuedThreadListCompletion = nil
-            beginThreadList(completion: queuedThreadListCompletion)
+            let includeHistory = queuedThreadListIncludesHistory
+            queuedThreadListIncludesHistory = false
+            beginThreadList(
+                includeHistory: includeHistory,
+                completion: queuedThreadListCompletion
+            )
         }
     }
 
@@ -719,6 +786,7 @@ final class CodexAppServerClient {
         case .threadList:
             let completion = activeThreadListCompletion
             activeThreadListCompletion = nil
+            activeThreadListIncludesHistory = false
             completion?(result)
         case .greetingMCPServerStatus, .greetingThreadStart, .greetingTurnStart:
             finishGreeting(.failure(CodexAppServerError.server(result.errorDescription)))
@@ -737,6 +805,7 @@ final class CodexAppServerClient {
         isInitialized = false
         pendingRequests.removeAll()
         activeThreadListCompletion = nil
+        activeThreadListIncludesHistory = false
         onConnectionChanged?(false)
 
         if status != 0 {

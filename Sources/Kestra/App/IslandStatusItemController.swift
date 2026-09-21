@@ -1,6 +1,21 @@
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
+
+struct MenuBarAppearanceRedrawGate {
+    private(set) var lastIsDark: Bool?
+
+    mutating func shouldRedraw(for isDark: Bool) -> Bool {
+        guard lastIsDark != isDark else { return false }
+        lastIsDark = isDark
+        return true
+    }
+
+    mutating func record(_ isDark: Bool) {
+        lastIsDark = isDark
+    }
+}
 
 @MainActor
 final class IslandStatusItemController: NSObject {
@@ -39,11 +54,16 @@ final class IslandStatusItemController: NSObject {
     private var storeObservation: AnyCancellable?
     private var cancellables = Set<AnyCancellable>()
     private var menuBarAppearanceObservation: NSKeyValueObservation?
-    private var logoRotationTimer: Timer?
-    private var logoRotationAngle: CGFloat = 0
-    private let logoRotationFramesPerSecond: CGFloat = 30
+    private var menuBarAppearanceRedrawGate = MenuBarAppearanceRedrawGate()
     private let logoRotationDurationForSingleTask: CGFloat = 3
     private let logoRotationSpeedCap: CGFloat = 4
+    private let logoRotationAnimationKey = "kestra.logoRotation"
+    private let menuBarLogoLayer = CALayer()
+    // NSStatusItem snapshots its replicant on every image assignment. Keep
+    // frame-based runner plugins below display refresh rate; the status icon
+    // uses Core Animation and does not redraw an NSImage every frame.
+    private let animatedStatusImageRefreshInterval: TimeInterval = 1.0 / 4.0
+    private var lastAnimatedStatusImageRefreshUptime: TimeInterval?
     private let squatRunner = SquatRunner()
 
     init(
@@ -80,7 +100,7 @@ final class IslandStatusItemController: NSObject {
         super.init()
 
         squatRunner.onFrame = { [weak self] in
-            self?.refreshStatusItemImage()
+            self?.refreshStatusItemImage(isAnimationFrame: true)
         }
 
         statusItem.autosaveName = KestraAppIdentity.bundleIdentifier + ".statusItem"
@@ -145,12 +165,14 @@ final class IslandStatusItemController: NSObject {
 
         let runningCount = selectedRunningTaskCount
         squatRunner.update(runningCount: runningCount)
+
+        menuBarAppearanceRedrawGate.record(menuBarUsesDarkAppearance)
+        button.image = makeStatusImage()
+        updateMenuBarLogoLayer(on: button)
         updateLogoRotation(
             isRunning: runningCount > 0
                 && squatRunner.selectedIconID == MenuBarIconPluginCatalog.statusIconID
         )
-
-        button.image = makeStatusImage()
         button.attributedTitle = NSAttributedString(string: "")
         button.title = ""
         button.imagePosition = .imageOnly
@@ -172,7 +194,11 @@ final class IslandStatusItemController: NSObject {
         guard menuBarAppearanceObservation == nil else { return }
         menuBarAppearanceObservation = button.observe(\NSStatusBarButton.effectiveAppearance, options: [.new]) { [weak self] _, _ in
             Task { @MainActor [weak self] in
-                self?.refreshStatusItemImage()
+                guard let self else { return }
+                guard self.menuBarAppearanceRedrawGate.shouldRedraw(
+                    for: self.menuBarUsesDarkAppearance
+                ) else { return }
+                self.refreshStatusItemImage()
             }
         }
     }
@@ -182,11 +208,8 @@ final class IslandStatusItemController: NSObject {
             return makeRunnerImage()
         }
 
-        return MenubarStatusIconRenderer.makeImage(
-            provider: displayedProvider,
+        return MenubarStatusIconRenderer.makeRingImage(
             usage: currentUsage,
-            isRunning: selectedRunningTaskCount > 0,
-            rotationAngle: logoRotationAngle,
             isDark: menuBarUsesDarkAppearance
         )
     }
@@ -260,9 +283,25 @@ final class IslandStatusItemController: NSObject {
         )
     }
 
-    private func refreshStatusItemImage() {
-        statusItem.button?.image = makeStatusImage()
-        statusItem.button?.toolTip = makeToolTip()
+    private func refreshStatusItemImage(isAnimationFrame: Bool = false) {
+        if isAnimationFrame {
+            let now = ProcessInfo.processInfo.systemUptime
+            if let lastAnimatedStatusImageRefreshUptime,
+               now - lastAnimatedStatusImageRefreshUptime < animatedStatusImageRefreshInterval {
+                return
+            }
+            lastAnimatedStatusImageRefreshUptime = now
+        } else {
+            lastAnimatedStatusImageRefreshUptime = ProcessInfo.processInfo.systemUptime
+        }
+
+        menuBarAppearanceRedrawGate.record(menuBarUsesDarkAppearance)
+        guard let button = statusItem.button else { return }
+        button.image = makeStatusImage()
+        updateMenuBarLogoLayer(on: button)
+        if !isAnimationFrame {
+            button.toolTip = makeToolTip()
+        }
     }
 
     private var selectedRunningTaskCount: Int {
@@ -297,23 +336,14 @@ final class IslandStatusItemController: NSObject {
     }
 
     private func updateLogoRotation(isRunning: Bool) {
-        if isRunning {
-            guard logoRotationTimer == nil else { return }
-            logoRotationAngle = 0
-            let timer = Timer(timeInterval: 1.0 / Double(logoRotationFramesPerSecond), repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.advanceLogoRotation() }
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            logoRotationTimer = timer
-        } else {
+        guard squatRunner.selectedIconID == MenuBarIconPluginCatalog.statusIconID else {
             stopLogoRotation()
+            return
         }
-    }
+        let layer = menuBarLogoLayer
 
-    private func advanceLogoRotation() {
-        guard selectedRunningTaskCount > 0 else {
+        if !isRunning {
             stopLogoRotation()
-            refreshStatusItemImage()
             return
         }
 
@@ -321,18 +351,88 @@ final class IslandStatusItemController: NSObject {
             logoRotationSpeedCap,
             CGFloat(sqrt(Double(max(1, selectedRunningTaskCount))))
         )
-        let radiansPerFrame = (2 * CGFloat.pi / logoRotationDurationForSingleTask)
-            * taskSpeed
-            / logoRotationFramesPerSecond
-        logoRotationAngle = (logoRotationAngle + radiansPerFrame)
-            .truncatingRemainder(dividingBy: 2 * CGFloat.pi)
-        refreshStatusItemImage()
+        let duration = Double(logoRotationDurationForSingleTask / taskSpeed)
+        if let animation = layer.animation(forKey: logoRotationAnimationKey) as? CABasicAnimation,
+           abs(animation.duration - duration) < 0.001 {
+            return
+        }
+
+        layer.removeAnimation(forKey: logoRotationAnimationKey)
+        let animation = CABasicAnimation(keyPath: "transform.rotation.z")
+        animation.fromValue = 0
+        animation.toValue = 2 * Double.pi
+        animation.duration = duration
+        animation.repeatCount = .infinity
+        animation.timingFunction = CAMediaTimingFunction(name: .linear)
+        animation.isRemovedOnCompletion = false
+        layer.add(animation, forKey: logoRotationAnimationKey)
     }
 
     private func stopLogoRotation() {
-        logoRotationTimer?.invalidate()
-        logoRotationTimer = nil
-        logoRotationAngle = 0
+        menuBarLogoLayer.removeAnimation(forKey: logoRotationAnimationKey)
+        menuBarLogoLayer.setAffineTransform(.identity)
+    }
+
+    private func updateMenuBarLogoLayer(on button: NSStatusBarButton) {
+        guard squatRunner.selectedIconID == MenuBarIconPluginCatalog.statusIconID else {
+            menuBarLogoLayer.removeFromSuperlayer()
+            stopLogoRotation()
+            return
+        }
+
+        button.wantsLayer = true
+        guard let buttonLayer = button.layer,
+              let logoImage = MenubarStatusIconRenderer.makeLogoImage(
+                  provider: displayedProvider,
+                  usage: currentUsage,
+                  isDark: menuBarUsesDarkAppearance
+              ) else {
+            menuBarLogoLayer.removeFromSuperlayer()
+            stopLogoRotation()
+            return
+        }
+
+        if menuBarLogoLayer.superlayer !== buttonLayer {
+            menuBarLogoLayer.removeFromSuperlayer()
+            buttonLayer.addSublayer(menuBarLogoLayer)
+        }
+
+        let imageRect = button.cell?.imageRect(forBounds: button.bounds)
+            ?? NSRect(
+                x: (button.bounds.width - MenubarStatusIconRenderer.imageSize.width) / 2,
+                y: (button.bounds.height - MenubarStatusIconRenderer.imageSize.height) / 2,
+                width: MenubarStatusIconRenderer.imageSize.width,
+                height: MenubarStatusIconRenderer.imageSize.height
+            )
+        let logoFrame = MenubarStatusIconRenderer.logoFrame(for: currentUsage)
+        let scaleX = imageRect.width / MenubarStatusIconRenderer.imageSize.width
+        let scaleY = imageRect.height / MenubarStatusIconRenderer.imageSize.height
+        let frame = NSRect(
+            x: imageRect.minX + logoFrame.minX * scaleX,
+            y: imageRect.minY + logoFrame.minY * scaleY,
+            width: logoFrame.width * scaleX,
+            height: logoFrame.height * scaleY
+        )
+        var proposedRect = NSRect(origin: .zero, size: logoImage.size)
+        guard let cgImage = logoImage.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: nil
+        ) else {
+            menuBarLogoLayer.contents = nil
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        menuBarLogoLayer.frame = frame
+        menuBarLogoLayer.contents = cgImage
+        menuBarLogoLayer.contentsGravity = .resizeAspect
+        menuBarLogoLayer.contentsScale = button.window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2
+        menuBarLogoLayer.isHidden = false
+        CATransaction.commit()
     }
 
     private func makeToolTip() -> String {

@@ -29,22 +29,40 @@ final class CodexTaskStore: ObservableObject {
     }
 
     func connectCLI(_ provider: AIProvider) {
-        do { try CLIHookIntegration(provider: provider).connect(); refreshClaude() }
+        do {
+            try CLIHookIntegration(provider: provider).connect()
+            refreshClaude(forceStatusRefresh: true)
+        }
         catch { cliStatuses[provider] = "连接失败：\(error.localizedDescription)" }
     }
 
     func connectClaude() {
-        do { try ClaudeHookMonitor.installHooks(); refreshClaude() }
+        do {
+            try ClaudeHookMonitor.installHooks()
+            refreshClaude(forceStatusRefresh: true)
+        }
         catch { claudeStatus = "连接失败：\(error.localizedDescription)" }
     }
 
-    private func refreshClaude() {
+    private let clientStatusPollingInterval: TimeInterval = 30
+    private var lastClientStatusRefresh: Date = .distantPast
+
+    private func refreshClaude(forceStatusRefresh: Bool = false) {
+        let now = Date.now
+        let shouldRefreshClientStatus = forceStatusRefresh
+            || now.timeIntervalSince(lastClientStatusRefresh) >= clientStatusPollingInterval
+        var nextCLIStatuses = cliStatuses
         otherTasks = []
+
         for (provider, monitor) in cliMonitors {
-            let integration = CLIHookIntegration(provider: provider)
             let snapshot = monitor.poll(mode: previewSettings.mode)
             otherTasks += snapshot.tasks
-            cliStatuses[provider] = monitor.error ?? (!integration.installed ? "本机尚未安装，或未找到 \(provider.name)" : !integration.configured ? "未找到监听配置" : "当前没任务")
+
+            if shouldRefreshClientStatus {
+                let integration = CLIHookIntegration(provider: provider)
+                nextCLIStatuses[provider] = monitor.error ?? (!integration.installed ? "本机尚未安装，或未找到 \(provider.name)" : !integration.configured ? "未找到监听配置" : "当前没任务")
+            }
+
             for task in snapshot.completed {
                 lastCompletedTask = task
                 onTaskCompleted?(task)
@@ -52,10 +70,18 @@ final class CodexTaskStore: ObservableObject {
         }
         let snapshot = claudeMonitor.poll(mode: previewSettings.mode)
         claudeTasks = snapshot.tasks
-        if let error = claudeMonitor.error { claudeStatus = error }
-        else if ClaudeHookMonitor.executable == nil { claudeStatus = "本机尚未安装 Claude Code，或未找到 claude 可执行文件" }
-        else if !ClaudeHookMonitor.isConfigured { claudeStatus = "未找到 Claude Code 监听配置" }
-        else { claudeStatus = "当前没任务" }
+        if shouldRefreshClientStatus {
+            if let error = claudeMonitor.error { claudeStatus = error }
+            else if ClaudeHookMonitor.executable == nil { claudeStatus = "本机尚未安装 Claude Code，或未找到 claude 可执行文件" }
+            else if !ClaudeHookMonitor.isConfigured { claudeStatus = "未找到 Claude Code 监听配置" }
+            else { claudeStatus = "当前没任务" }
+
+            if cliStatuses != nextCLIStatuses {
+                cliStatuses = nextCLIStatuses
+            }
+            lastClientStatusRefresh = now
+        }
+
         reconcileTasks()
         for task in snapshot.completed {
             lastCompletedTask = task
@@ -434,14 +460,21 @@ final class CodexTaskStore: ObservableObject {
     private var isRefreshing = false
     private var isReadingActivity = false
     private var isReadingLatestMessages = false
+    private var activityNotificationRefreshTask: Task<Void, Never>?
     private var activeThreadIDs = Set<String>()
     private var monitoredRecords: [CodexThreadRecord] = []
+    private var pendingActivityDiscoveryRecords: [CodexThreadRecord] = []
+    private var pendingActivityDiscoveryIndex = 0
     private var knownTasksByID = [String: CodexTask]()
     private var pendingCompletionEvents: [String: CodexTaskCompletionEvent] = [:]
     private let sessionReader = CodexSessionReader()
 
     private let activeStatePollingInterval: TimeInterval = 0.5
     private let metadataPollingInterval: TimeInterval = 2.0
+    private let fullThreadListRefreshInterval: TimeInterval = 60
+    private let activityDiscoveryBatchSize = 32
+    private var lastFullThreadListRefresh: Date = .distantPast
+    private var threadRecordsByID = [String: CodexThreadRecord]()
 
     init(
         previewSettings: CodexTaskPreviewSettingsStore,
@@ -510,6 +543,11 @@ final class CodexTaskStore: ObservableObject {
         isRefreshing = false
         isReadingActivity = false
         isMonitoring = false
+        activityNotificationRefreshTask?.cancel()
+        activityNotificationRefreshTask = nil
+        lastClientStatusRefresh = .distantPast
+        lastFullThreadListRefresh = .distantPast
+        threadRecordsByID.removeAll(keepingCapacity: false)
         activeStateTimer?.invalidate()
         activeStateTimer = nil
         metadataTimer?.invalidate()
@@ -519,13 +557,15 @@ final class CodexTaskStore: ObservableObject {
         latestMessageRequestID += 1
         isReadingLatestMessages = false
         monitoredRecords.removeAll(keepingCapacity: false)
+        pendingActivityDiscoveryRecords.removeAll(keepingCapacity: false)
+        pendingActivityDiscoveryIndex = 0
         limitRefreshController.stop()
         appServerClient.stop()
     }
 
     func refreshNow() {
-        refreshClaude()
-        refreshTasks()
+        refreshClaude(forceStatusRefresh: true)
+        refreshTasks(forceFullHistory: true)
         readActivity()
     }
 
@@ -535,7 +575,22 @@ final class CodexTaskStore: ObservableObject {
         // app-server notifications are a low-latency hint. Session events are
         // still polled because another Codex process owns the actual turn.
         readActivity()
-        refreshTasks()
+        guard activityNotificationRefreshTask == nil else { return }
+
+        // A turn can emit many thread/turn notifications in a short burst.
+        // Coalesce them so one burst cannot enqueue a new full thread/list
+        // request for every notification.
+        activityNotificationRefreshTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                return
+            }
+
+            guard let self, self.isMonitoring else { return }
+            self.activityNotificationRefreshTask = nil
+            self.refreshTasks()
+        }
     }
 
     private var isReconcilingAccount = false
@@ -564,13 +619,17 @@ final class CodexTaskStore: ObservableObject {
         }
     }
 
-    private func refreshTasks() {
+    private func refreshTasks(forceFullHistory: Bool = false) {
         reconcileMissingAccount()
         guard !isRefreshing else { return }
         isRefreshing = true
         let generation = monitoringGeneration
+        let hasPendingActivityDiscovery = pendingActivityDiscoveryIndex < pendingActivityDiscoveryRecords.count
+        let includeHistory = forceFullHistory
+            || (!hasPendingActivityDiscovery
+                && Date.now.timeIntervalSince(lastFullThreadListRefresh) >= fullThreadListRefreshInterval)
 
-        appServerClient.requestThreadList { [weak self] result in
+        appServerClient.requestThreadList(includeHistory: includeHistory) { [weak self] result in
             guard let self else { return }
             guard generation == self.monitoringGeneration else { return }
             self.isRefreshing = false
@@ -579,10 +638,30 @@ final class CodexTaskStore: ObservableObject {
             case .success(let records):
                 self.lastError = nil
                 self.lastUpdated = .now
-                self.monitoredRecords = records
-                self.apply(records: records)
-                self.refreshLatestMessages(for: records)
-                self.readActivity(for: records)
+                if includeHistory {
+                    self.lastFullThreadListRefresh = .now
+                }
+                let recordsForActivity = self.mergeThreadRecords(
+                    records,
+                    includesHistory: includeHistory
+                )
+                let recordsForCards = self.visibleThreadRecords(from: recordsForActivity)
+                if includeHistory {
+                    // A complete thread/list is needed to find an old task that
+                    // is still running, but reading every session JSONL file at
+                    // once creates a large, avoidable CPU spike. Keep the
+                    // visible/running records hot and discover the rest in
+                    // bounded batches on the existing 500 ms activity poll.
+                    let visibleIDs = Set(recordsForCards.map(\.id))
+                    self.pendingActivityDiscoveryRecords = recordsForActivity.filter {
+                        !visibleIDs.contains($0.id)
+                    }
+                    self.pendingActivityDiscoveryIndex = 0
+                }
+                self.monitoredRecords = recordsForCards
+                self.apply(records: recordsForCards)
+                self.refreshLatestMessages(for: recordsForCards)
+                self.readActivity(for: recordsForCards)
                 self.emitPendingCompletionsIfPossible()
                 self.logger.debug(
                     "Codex snapshot tasks=\(self.tasks.count, privacy: .public) running=\(self.runningTaskCount, privacy: .public)"
@@ -644,6 +723,36 @@ final class CodexTaskStore: ObservableObject {
         return Array(runningRecords) + Array(recentRecords)
     }
 
+    private func mergeThreadRecords(
+        _ records: [CodexThreadRecord],
+        includesHistory: Bool
+    ) -> [CodexThreadRecord] {
+        if includesHistory {
+            threadRecordsByID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
+            return records
+        }
+
+        for record in records {
+            threadRecordsByID[record.id] = record
+        }
+
+        let activeRecords = activeThreadIDs.compactMap { threadRecordsByID[$0] }
+        let activeIDs = Set(activeRecords.map(\.id))
+        let recentRecords = records.filter { !activeIDs.contains($0.id) }
+        var merged = activeRecords
+        merged.append(contentsOf: recentRecords)
+        return merged
+    }
+
+    private func visibleThreadRecords(from records: [CodexThreadRecord]) -> [CodexThreadRecord] {
+        let activeRecords = records.filter { activeThreadIDs.contains($0.id) }
+        let activeIDs = Set(activeRecords.map(\.id))
+        let recentRecords = records
+            .filter { !activeIDs.contains($0.id) }
+            .prefix(12)
+        return activeRecords + recentRecords
+    }
+
     private func applyLatestMessages(_ messages: [String: String]) {
         var didChange = false
 
@@ -678,14 +787,38 @@ final class CodexTaskStore: ObservableObject {
 
     private func readActivity(for records: [CodexThreadRecord]) {
         guard !isReadingActivity else { return }
-        guard !records.isEmpty else { return }
+
+        var recordsToRead = records
+        let activeRecords = activeThreadIDs.compactMap { threadRecordsByID[$0] }
+        let knownIDs = Set(recordsToRead.map(\.id))
+        recordsToRead.append(contentsOf: activeRecords.filter { !knownIDs.contains($0.id) })
+
+        let remainingDiscovery = pendingActivityDiscoveryRecords.count - pendingActivityDiscoveryIndex
+        if remainingDiscovery > 0 {
+            let endIndex = min(
+                pendingActivityDiscoveryIndex + activityDiscoveryBatchSize,
+                pendingActivityDiscoveryRecords.count
+            )
+            let batch = pendingActivityDiscoveryRecords[pendingActivityDiscoveryIndex..<endIndex]
+            pendingActivityDiscoveryIndex = endIndex
+            let readIDs = Set(recordsToRead.map(\.id))
+            recordsToRead.append(contentsOf: batch.filter { !readIDs.contains($0.id) })
+
+            if pendingActivityDiscoveryIndex == pendingActivityDiscoveryRecords.count {
+                pendingActivityDiscoveryRecords.removeAll(keepingCapacity: false)
+                pendingActivityDiscoveryIndex = 0
+            }
+        }
+
+        guard !recordsToRead.isEmpty else { return }
 
         isReadingActivity = true
         let generation = monitoringGeneration
         let activityReader = self.activityReader
+        let recordsForRead = recordsToRead
         Task { @MainActor [weak self] in
             let snapshot = await Task.detached(priority: .utility) {
-                await activityReader.snapshot(records: records)
+                await activityReader.snapshot(records: recordsForRead)
             }.value
 
             guard let self else { return }
@@ -699,6 +832,21 @@ final class CodexTaskStore: ObservableObject {
 
     private func applyActivity(_ snapshot: CodexActivitySnapshot) {
         activeThreadIDs = snapshot.activeThreadIDs
+        for threadID in activeThreadIDs where knownTasksByID[threadID] == nil {
+            guard let record = threadRecordsByID[threadID] else { continue }
+            knownTasksByID[threadID] = CodexTask(
+                id: record.id,
+                title: record.title,
+                summary: record.summary,
+                updatedAt: record.updatedAt,
+                path: record.path,
+                isRunning: true,
+                model: nil,
+                effort: nil,
+                startedAt: nil,
+                endedAt: nil
+            )
+        }
         for (id, date) in snapshot.startedAt {
             knownTasksByID[id]?.startedAt = date
             knownTasksByID[id]?.endedAt = nil

@@ -6,6 +6,7 @@ import AppKit
 @MainActor
 struct MenubarStatusIconRenderer {
     private static var cachedBrandLogo: NSImage?
+    static let imageSize = NSSize(width: 24, height: 24)
 
     static func makeImage(
         provider: AIProvider?,
@@ -29,24 +30,55 @@ struct MenubarStatusIconRenderer {
             )
         }
 
-        switch windows.count {
-        case 1:
-            drawSingleProgressRing(windows[0], geometry: geometry)
-        case 2:
-            // displayWindows is sorted from the shorter window to the longer
-            // one. Use the left half for 5h and the right half for 7d.
-            drawSplitProgressRing(
-                shortWindow: windows[0],
-                longWindow: windows[1],
-                geometry: geometry
-            )
-        default:
-            break
-        }
+        drawProgressRings(windows: windows, geometry: geometry)
 
         image.unlockFocus()
         image.isTemplate = false
         return image
+    }
+
+    static func makeRingImage(
+        usage: CodexAccountUsage?,
+        isDark: Bool
+    ) -> NSImage {
+        let geometry = IconGeometry()
+        let windows = Array((usage?.displayWindows ?? []).prefix(2))
+        let image = NSImage(size: geometry.imageSize)
+        image.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        drawProgressRings(windows: windows, geometry: geometry)
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    static func makeLogoImage(
+        provider: AIProvider?,
+        usage: CodexAccountUsage?,
+        isDark: Bool
+    ) -> NSImage? {
+        let geometry = IconGeometry()
+        guard let logo = logo(for: provider) else { return nil }
+        let side = geometry.logoSize(forWindowCount: min(usage?.displayWindows.count ?? 0, 2))
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.lockFocus()
+        NSGraphicsContext.current?.imageInterpolation = .high
+        drawLogo(
+            logo,
+            in: NSRect(x: 0, y: 0, width: side, height: side),
+            rotationAngle: 0,
+            tint: isDark ? .white : .black
+        )
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
+    static func logoFrame(for usage: CodexAccountUsage?) -> NSRect {
+        logoRect(
+            forWindowCount: min(usage?.displayWindows.count ?? 0, 2),
+            geometry: IconGeometry()
+        )
     }
 
     private struct IconGeometry {
@@ -83,6 +115,26 @@ struct MenubarStatusIconRenderer {
             width: side,
             height: side
         )
+    }
+
+    private static func drawProgressRings(
+        windows: [CodexAccountUsage.Window],
+        geometry: IconGeometry
+    ) {
+        switch windows.count {
+        case 1:
+            drawSingleProgressRing(windows[0], geometry: geometry)
+        case 2:
+            // displayWindows is sorted from the shorter window to the longer
+            // one. Use the left half for 5h and the right half for 7d.
+            drawSplitProgressRing(
+                shortWindow: windows[0],
+                longWindow: windows[1],
+                geometry: geometry
+            )
+        default:
+            break
+        }
     }
 
     private static func logo(for provider: AIProvider?) -> NSImage? {
