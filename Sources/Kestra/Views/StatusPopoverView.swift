@@ -1216,14 +1216,67 @@ private struct AnimationSelectionRow: View {
     }
 }
 
-private struct RunningTaskIndicator: View {
-    var body: some View {
-        Image(systemName: "circle.fill")
-            .resizable()
-            .frame(width: 7, height: 7)
-            .foregroundStyle(.green)
-            .symbolEffect(.breathe.pulse.wholeSymbol, options: .repeat(.continuous).speed(2))
-            .accessibilityLabel("运行中")
+private final class RunningTaskIndicatorView: NSView {
+    private let pulseAnimationKey = "runningPulse"
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.systemGreen.cgColor
+        layer?.cornerRadius = 3.5
+        setAccessibilityElement(true)
+        setAccessibilityRole(.image)
+        setAccessibilityLabel("运行中")
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(accessibilityDisplayOptionsDidChange),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil
+        )
+        updatePulseAnimation()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        updatePulseAnimation()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func accessibilityDisplayOptionsDidChange() {
+        updatePulseAnimation()
+    }
+
+    private func updatePulseAnimation() {
+        guard let layer else { return }
+        layer.removeAnimation(forKey: pulseAnimationKey)
+        layer.opacity = 1
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+
+        // Animate this tiny layer, without invalidating the SwiftUI layout
+        // graph on every frame of a repeating symbol effect.
+        let pulse = CABasicAnimation(keyPath: "opacity")
+        pulse.fromValue = 1
+        pulse.toValue = 0.35
+        pulse.duration = 0.6
+        pulse.autoreverses = true
+        pulse.repeatCount = .infinity
+        pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(pulse, forKey: pulseAnimationKey)
+    }
+}
+
+private struct RunningTaskIndicator: NSViewRepresentable {
+    func makeNSView(context: Context) -> RunningTaskIndicatorView {
+        RunningTaskIndicatorView(frame: NSRect(x: 0, y: 0, width: 7, height: 7))
+    }
+
+    func updateNSView(_ nsView: RunningTaskIndicatorView, context: Context) {}
+
+    static func dismantleNSView(_ nsView: RunningTaskIndicatorView, coordinator: ()) {
+        nsView.layer?.removeAllAnimations()
     }
 }
 
@@ -1328,6 +1381,7 @@ private struct TaskRow: View {
                 Group {
                     if task.isRunning {
                         RunningTaskIndicator()
+                            .frame(width: 7, height: 7)
                     } else {
                         Circle()
                             .fill(.primary.opacity(0.28))

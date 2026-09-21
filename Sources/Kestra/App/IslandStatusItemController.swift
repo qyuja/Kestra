@@ -685,6 +685,8 @@ final class IslandStatusItemController: NSObject {
         hoverShowWorkItem?.cancel()
         hoverShowWorkItem = nil
         hoverPanel?.orderOut(nil)
+        hoverPanel?.contentViewController = nil
+        hoverPanel?.close()
         hoverPanel = nil
         isHoverPanelHovering = false
     }

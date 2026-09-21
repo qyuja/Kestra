@@ -471,10 +471,21 @@ final class CodexTaskStore: ObservableObject {
 
     private let activeStatePollingInterval: TimeInterval = 0.5
     private let metadataPollingInterval: TimeInterval = 2.0
+    // The footer only needs a human-readable heartbeat. Publishing this date
+    // on every metadata poll invalidates the whole popover when no task
+    // changed, so keep the observable heartbeat below the monitor cadence.
+    private let lastUpdatedPublishInterval: TimeInterval = 10
+    private var lastPublishedUpdatedAt: Date = .distantPast
+    private let latestMessageRefreshInterval: TimeInterval = 10
     private let fullThreadListRefreshInterval: TimeInterval = 60
     private let activityDiscoveryBatchSize = 32
     private var lastFullThreadListRefresh: Date = .distantPast
     private var threadRecordsByID = [String: CodexThreadRecord]()
+    private var latestMessageRecordSignature: String?
+    private var latestMessagePreviewMode: CodexTaskPreviewMode?
+    private var latestMessageReadAt: Date = .distantPast
+    private var pendingLatestMessageRecordSignature: String?
+    private var pendingLatestMessagePreviewMode: CodexTaskPreviewMode?
 
     init(
         previewSettings: CodexTaskPreviewSettingsStore,
@@ -547,6 +558,12 @@ final class CodexTaskStore: ObservableObject {
         activityNotificationRefreshTask = nil
         lastClientStatusRefresh = .distantPast
         lastFullThreadListRefresh = .distantPast
+        lastPublishedUpdatedAt = .distantPast
+        latestMessageRecordSignature = nil
+        latestMessagePreviewMode = nil
+        latestMessageReadAt = .distantPast
+        pendingLatestMessageRecordSignature = nil
+        pendingLatestMessagePreviewMode = nil
         threadRecordsByID.removeAll(keepingCapacity: false)
         activeStateTimer?.invalidate()
         activeStateTimer = nil
@@ -637,9 +654,13 @@ final class CodexTaskStore: ObservableObject {
             switch result {
             case .success(let records):
                 self.lastError = nil
-                self.lastUpdated = .now
+                let now = Date.now
+                if now.timeIntervalSince(self.lastPublishedUpdatedAt) >= self.lastUpdatedPublishInterval {
+                    self.lastUpdated = now
+                    self.lastPublishedUpdatedAt = now
+                }
                 if includeHistory {
-                    self.lastFullThreadListRefresh = .now
+                    self.lastFullThreadListRefresh = now
                 }
                 let recordsForActivity = self.mergeThreadRecords(
                     records,
@@ -660,7 +681,7 @@ final class CodexTaskStore: ObservableObject {
                 }
                 self.monitoredRecords = recordsForCards
                 self.apply(records: recordsForCards)
-                self.refreshLatestMessages(for: recordsForCards)
+                self.refreshLatestMessages(for: recordsForCards, force: forceFullHistory)
                 self.readActivity(for: recordsForCards)
                 self.emitPendingCompletionsIfPossible()
                 self.logger.debug(
@@ -673,19 +694,58 @@ final class CodexTaskStore: ObservableObject {
         }
     }
 
-    private func refreshLatestMessages(for records: [CodexThreadRecord]) {
+    private func refreshLatestMessages(for records: [CodexThreadRecord], force: Bool = false) {
+        let recordsToRead = recordsForVisibleCards(from: records)
+        let previewMode = previewSettings.mode
+        let signature = recordsToRead
+            .map { "\($0.id)|\($0.updatedAt.timeIntervalSinceReferenceDate)" }
+            .joined(separator: ";")
+
+        // Always invalidate a read for a different key before considering a
+        // cache hit. Otherwise a quick state change can let the old request
+        // finish and apply a transcript for the wrong preview mode/records.
+        if isReadingLatestMessages,
+           (signature != pendingLatestMessageRecordSignature
+            || previewMode != pendingLatestMessagePreviewMode
+            || force) {
+            latestMessageTask?.cancel()
+            latestMessageTask = nil
+            latestMessageRequestID += 1
+            isReadingLatestMessages = false
+            pendingLatestMessageRecordSignature = nil
+            pendingLatestMessagePreviewMode = nil
+        }
+
+        if !force,
+           signature == latestMessageRecordSignature,
+           previewMode == latestMessagePreviewMode,
+           Date.now.timeIntervalSince(latestMessageReadAt) < latestMessageRefreshInterval {
+            return
+        }
+        if !force,
+           isReadingLatestMessages,
+           signature == pendingLatestMessageRecordSignature,
+           previewMode == pendingLatestMessagePreviewMode {
+            return
+        }
+
         latestMessageTask?.cancel()
         latestMessageTask = nil
         latestMessageRequestID += 1
         let requestID = latestMessageRequestID
 
-        let recordsToRead = recordsForVisibleCards(from: records)
         guard !recordsToRead.isEmpty else {
+            latestMessageRecordSignature = signature
+            latestMessagePreviewMode = previewMode
+            latestMessageReadAt = .now
+            pendingLatestMessageRecordSignature = nil
+            pendingLatestMessagePreviewMode = nil
             isReadingLatestMessages = false
             return
         }
-        let previewMode = previewSettings.mode
         let sessionReader = self.sessionReader
+        pendingLatestMessageRecordSignature = signature
+        pendingLatestMessagePreviewMode = previewMode
         isReadingLatestMessages = true
 
         let readTask = Task { @MainActor [weak self] in
@@ -699,6 +759,11 @@ final class CodexTaskStore: ObservableObject {
             guard requestID == self.latestMessageRequestID else { return }
             self.isReadingLatestMessages = false
             guard self.isMonitoring, !Task.isCancelled else { return }
+            self.latestMessageRecordSignature = signature
+            self.latestMessagePreviewMode = previewMode
+            self.latestMessageReadAt = .now
+            self.pendingLatestMessageRecordSignature = nil
+            self.pendingLatestMessagePreviewMode = nil
             self.applyLatestMessages(messages)
             for (id, configuration) in models {
                 self.knownTasksByID[id]?.model = configuration.model
