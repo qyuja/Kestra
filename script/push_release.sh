@@ -73,6 +73,7 @@ echo "Running Swift tests..."
 swift test
 echo "Running protocol adapter tests..."
 node script/test_pi.mjs
+node script/test_omp.mjs
 node script/test_opencode.mjs
 git diff --check
 

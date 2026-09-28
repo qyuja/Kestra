@@ -186,7 +186,7 @@ final class CodexAppServerClient {
             return
         }
         guard canContinueGreeting?() ?? true else {
-            finishGreeting(.failure(CodexAppServerError.server("检测到运行中任务，问候已暂存")))
+            finishGreeting(.failure(CodexAppServerError.server("问候线程状态已失效")))
             return
         }
 
@@ -819,6 +819,8 @@ final class CodexAppServerClient {
 
     private static func codexExecutableURL(fileManager: FileManager) -> URL? {
         let candidates = [
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
+            "/Applications/Codex.app/Contents/Resources/codex-cli/bin/codex",
             "/Applications/ChatGPT.app/Contents/Resources/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
             "/opt/homebrew/bin/codex",

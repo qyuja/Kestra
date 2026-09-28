@@ -22,9 +22,9 @@ final class CodexTaskStore: ObservableObject {
     @Published private(set) var cliStatuses: [AIProvider: String] = [:]
     private let cliMonitors = AIProvider.hookProviders.map { provider in
         (provider, ClaudeHookMonitor(
-            directory: ClaudeHookMonitor.eventsDirectory.deletingLastPathComponent().appendingPathComponent(provider.rawValue + "-events", isDirectory: true),
+            directory: ClaudeHookMonitor.eventsDirectory.deletingLastPathComponent().appendingPathComponent(provider.eventDirectoryName, isDirectory: true),
             provider: provider,
-            legacyDirectory: KestraAppIdentity.legacyApplicationSupportDirectory.appendingPathComponent(provider.rawValue + "-events", isDirectory: true)
+            legacyDirectory: KestraAppIdentity.legacyApplicationSupportDirectory.appendingPathComponent(provider.eventDirectoryName, isDirectory: true)
         ))
     }
 
@@ -500,8 +500,7 @@ final class CodexTaskStore: ObservableObject {
             self.accountQuotas = states
             self.limitRefreshController.observe(
                 profiles: self.accountProfiles,
-                states: states,
-                hasRunningTasks: self.tasks.contains(where: \.isRunning)
+                states: states
             )
         }
 
@@ -987,7 +986,6 @@ final class CodexTaskStore: ObservableObject {
         if tasks != nextTasks {
             tasks = nextTasks
         }
-        limitRefreshController.updateRunningTaskState(nextTasks.contains(where: \.isRunning))
     }
 
     private func emitPendingCompletionsIfPossible() {

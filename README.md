@@ -21,7 +21,7 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 
 - Codex / ChatGPT：通过本地 `codex app-server` 和 session 状态读取任务。
 - Claude Code：通过 CLI Hooks 读取任务，并提供账号登记、重登和手动切换。
-- Cursor、Pi、OpenCode、Gemini CLI、Qwen Code、Grok Build、WorkBuddy：通过各自的本地 Hook / 插件协议接入；其中部分仍属于实验性适配，真实客户端版本和模式需要单独验证。
+- Cursor、Pi、oh-my-pi、OpenCode、Gemini CLI、Qwen Code、Grok Build、WorkBuddy：通过各自的本地 Hook / 插件协议接入；其中部分仍属于实验性适配，真实客户端版本和模式需要单独验证。oh-my-pi 按 OMP 配置安装到当前 profile 和其他已发现的 profile 的 `agent/extensions`（尊重 `PI_CONFIG_DIR` 和默认 profile 的 `PI_CODING_AGENT_DIR`）；连接后重启 `omp`，新建 profile 后点击“同步 OMP Profiles”。只监听使用工具的 coding work，普通聊天会被忽略。
 
 这里只监听 coding/work agent 的任务，不把普通网站聊天或纯聊天模型本身当作任务来源。模型和 effort 是任务属性。
 
@@ -59,6 +59,7 @@ SPARKLE_ENABLED=true ./script/build_and_run.sh package
 
 ```bash
 node script/test_pi.mjs
+node script/test_omp.mjs
 node script/test_opencode.mjs
 ```
 
@@ -124,7 +125,7 @@ open /Applications/Kestra.app
 - 账号切换只保存必要的本地账号元数据；凭据保存在客户端文件或 macOS 钥匙串中，不写入任务列表、README、日志或 Git 仓库。
 - 应用数据默认位于 `~/Library/Application Support/com.kiannest.kestra/`；Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
 - 应用不会扫描或上传完整历史；任务预览只读取界面需要的截断内容。
-- 额度唤醒只处理本地 Codex app-server 返回的额度快照。开启后，在检测到重置且没有运行中任务时，会向对应账号发送一次真实问候请求；该请求可能消耗额度，临时线程不会写入持久会话。
+- 额度唤醒只处理本地 Codex app-server 返回的额度快照。开启后，在检测到重置时，会通过独立临时线程向对应账号发送一次真实问候请求；该请求可能消耗额度，临时线程不会写入持久会话，也不会阻塞运行中的任务。
 
 ## 当前限制
 

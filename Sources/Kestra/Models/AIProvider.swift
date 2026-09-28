@@ -2,12 +2,12 @@ import SwiftUI
 
 /// Task sources are agent clients, not the models they invoke.
 enum AIProvider: String, CaseIterable, Codable, Identifiable {
-    case codex, claude, cursor, pi, opencode, gemini, qwen, grok, workbuddy
+    case codex, claude, cursor, pi, ohMyPi, opencode, gemini, qwen, grok, workbuddy
     case deepseekHarness, cline, copilot, windsurf, kiro
 
     static let primaryProviders: [AIProvider] = [.codex, .claude, .cursor, .pi, .opencode, .gemini]
     static let additionalProviders: [AIProvider] = allCases.filter { !primaryProviders.contains($0) }
-    static let hookProviders: [AIProvider] = [.opencode, .gemini, .qwen, .grok, .workbuddy, .pi, .cursor]
+    static let hookProviders: [AIProvider] = [.opencode, .gemini, .qwen, .grok, .workbuddy, .pi, .ohMyPi, .cursor]
     var id: String { rawValue }
     var name: String {
         switch self {
@@ -20,6 +20,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
         case .workbuddy: "WorkBuddy"
         case .cursor: "Cursor"
         case .pi: "Pi"
+        case .ohMyPi: "oh-my-pi"
         case .deepseekHarness: "DeepSeek Harness"
         case .cline: "Cline"
         case .copilot: "GitHub Copilot"
@@ -38,6 +39,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
         case .workbuddy: "person.crop.square"
         case .cursor: "cursorarrow"
         case .pi: "p.circle"
+        case .ohMyPi: "p.circle.fill"
         case .deepseekHarness: "water.waves"
         case .cline: "terminal"
         case .copilot: "airplane"
@@ -45,17 +47,27 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
         case .kiro: "k.circle"
         }
     }
-    var logoResourceName: String { self == .codex ? "chatgpt" : rawValue }
+    var logoResourceName: String {
+        switch self {
+        case .codex: "chatgpt"
+        case .ohMyPi: "ohMyPi"
+        default: rawValue
+        }
+    }
     var tint: Color { self == .claude ? .orange : .green }
     var integrationStatus: String {
         switch self {
         case .pi: "Pi 扩展 · CLI / 加载扩展的宿主"
+        case .ohMyPi: "OMP 扩展 · omp / 加载扩展的宿主"
         case .cursor: "本机 Agent Hooks · 不含 Tab 补全"
         case .claude: "Code 已适配 · Cowork 尚未接入"
         default: isImplemented ? "任务监听" : "任务协议适配尚未完成"
         }
     }
     var isImplemented: Bool { self == .codex || self == .claude || Self.hookProviders.contains(self) }
+    var eventDirectoryName: String {
+        self == .ohMyPi ? "oh-my-pi-events" : "\(rawValue)-events"
+    }
     var frontmostApplicationBundleIdentifiers: Set<String> {
         self == .codex ? ["com.openai.codex", "com.openai.chatgpt", "com.openai.chat"] : []
     }

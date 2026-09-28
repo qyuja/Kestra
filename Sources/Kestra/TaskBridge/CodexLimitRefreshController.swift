@@ -19,12 +19,10 @@ final class CodexLimitRefreshController {
         subsystem: KestraAppIdentity.bundleIdentifier,
         category: "limit-refresh"
     )
-
     private var profilesByID: [String: CodexAccountProfile] = [:]
     private var pending: [String: PendingRefresh] = [:]
     private var active: PendingRefresh?
     private var client: CodexAppServerClient?
-    private var hasRunningTasks = false
     private var cancellables = Set<AnyCancellable>()
 
     private(set) var lastStatus: String?
@@ -53,10 +51,8 @@ final class CodexLimitRefreshController {
     func observe(
         profiles: [CodexAccountProfile],
         states: [String: CodexAccountQuotaState],
-        hasRunningTasks: Bool,
         now: Date = .now
     ) {
-        self.hasRunningTasks = hasRunningTasks
         profilesByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
 
         for profile in profiles where profile.isEnabled {
@@ -70,16 +66,6 @@ final class CodexLimitRefreshController {
         }
 
         loadPersistedPendingEvents()
-        drainIfPossible()
-    }
-
-    func updateRunningTaskState(_ hasRunningTasks: Bool) {
-        self.hasRunningTasks = hasRunningTasks
-        if hasRunningTasks, active != nil {
-            stop()
-            lastStatus = "检测到运行中任务，额度重置问候已暂存"
-            return
-        }
         drainIfPossible()
     }
 
@@ -118,7 +104,7 @@ final class CodexLimitRefreshController {
     }
 
     private func drainIfPossible() {
-        guard settings.isEnabled, !hasRunningTasks, active == nil, client == nil else { return }
+        guard settings.isEnabled, active == nil, client == nil else { return }
         let staleKeys = pending.values.compactMap { refresh in
             profilesByID[refresh.event.accountID]?.isEnabled == true ? nil : refresh.key
         }
@@ -153,7 +139,7 @@ final class CodexLimitRefreshController {
         self.client = client
         client.canContinueGreeting = { [weak self] in
             guard let self else { return false }
-            return !self.hasRunningTasks && self.active?.key == refresh.key
+            return self.active?.key == refresh.key
         }
         client.onError = { [weak self] message in
             self?.finish(refresh, result: .failure(CodexLimitRefreshError.server(message)))

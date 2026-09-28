@@ -87,6 +87,54 @@ final class CodexLimitRefreshTests: XCTestCase {
         XCTAssertTrue(reloaded.pendingEvents(for: accountID).isEmpty)
     }
 
+    @MainActor
+    func testControllerInitializationPreservesPendingRefreshEvents() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("KestraLimitRefresh-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let migrationKey = "codex.limitRefresh.pendingBacklogCleared.v1"
+        let standardDefaults = UserDefaults.standard
+        let previousMigrationValue = standardDefaults.object(forKey: migrationKey)
+        standardDefaults.removeObject(forKey: migrationKey)
+        defer {
+            if let previousMigrationValue {
+                standardDefaults.set(previousMigrationValue, forKey: migrationKey)
+            } else {
+                standardDefaults.removeObject(forKey: migrationKey)
+            }
+        }
+
+        let paths = TaskBridgePaths(root: root)
+        let accountID = "account-a"
+        let history = CodexLimitRefreshHistoryStore(paths: paths)
+        _ = history.observe(
+            accountID: accountID,
+            usage: usage(remainingPercent: 12, resetsAt: 900),
+            recordPending: true,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+        _ = history.observe(
+            accountID: accountID,
+            usage: usage(remainingPercent: 100, resetsAt: 1_300),
+            recordPending: true,
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+        let suite = "KestraTests." + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        _ = CodexLimitRefreshController(
+            settings: CodexLimitRefreshSettingsStore(defaults: defaults),
+            historyStore: CodexLimitRefreshHistoryStore(paths: paths)
+        )
+
+        XCTAssertEqual(
+            CodexLimitRefreshHistoryStore(paths: paths).pendingEvents(for: accountID).count,
+            1
+        )
+    }
+
     private func usage(remainingPercent: Int, resetsAt: TimeInterval) -> CodexAccountUsage {
         CodexAccountUsage(
             accountID: "account-a",

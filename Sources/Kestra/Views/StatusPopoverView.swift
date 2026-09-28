@@ -45,7 +45,7 @@ struct StatusPopoverView: View {
     @State private var activeProvider: AIProvider = .codex
     @State private var isRunningSectionExpanded = true
     @State private var isRecentSectionExpanded = true
-    @State private var showsAdditionalProviders = false
+    @State private var isEditingProviders = false
     @State private var showsFadeDirections = false
     @State private var showsAccounts = false
     @State private var showsClaudeAccounts = false
@@ -367,15 +367,28 @@ struct StatusPopoverView: View {
             if activeProvider == .claude {
                 Text("Cowork 尚未接入").font(.system(size: 10)).foregroundStyle(.secondary)
             }
-            if AIProvider.hookProviders.contains(activeProvider),
-               CLIHookIntegration(provider: activeProvider).installed,
-               !CLIHookIntegration(provider: activeProvider).configured {
-                Button("连接 \(activeProvider.name)") { store.connectCLI(activeProvider) }
+            if AIProvider.hookProviders.contains(activeProvider) {
+                let integration = CLIHookIntegration(provider: activeProvider)
+                if integration.installed && (!integration.configured || activeProvider == .ohMyPi) {
+                    Button(activeProvider == .ohMyPi && integration.configured ? "同步 OMP Profiles" : "连接 \(activeProvider.name)") {
+                        store.connectCLI(activeProvider)
+                    }
                     .buttonStyle(.bordered)
-                    .help(activeProvider == .pi ? "安装扩展后，在 Pi 中执行 /reload 或重启 Pi；需要支持 agent_settled 的版本" : activeProvider.integrationStatus)
+                    .help(
+                        activeProvider == .pi
+                            ? "安装扩展后，在 Pi 中执行 /reload 或重启 Pi；需要支持 agent_settled 的版本"
+                            : activeProvider == .ohMyPi
+                                ? "安装扩展到当前及其他可访问的 OMP profiles 后重启 omp"
+                                : activeProvider.integrationStatus
+                    )
+                }
             }
             if activeProvider == .pi, CLIHookIntegration(provider: .pi).configured {
                 Text("连接后在 Pi 执行 /reload 或重启 Pi")
+                    .font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            if activeProvider == .ohMyPi, CLIHookIntegration(provider: .ohMyPi).configured {
+                Text("连接后重启 omp；新建 profile 后点击同步；普通聊天不会计入任务")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }
             if activeProvider == .workbuddy {
@@ -710,79 +723,117 @@ struct StatusPopoverView: View {
 
     private var providerVisibilitySection: some View {
         VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
-            settingsGroupTitle("客户端")
+            HStack {
+                settingsGroupTitle("客户端")
+                Spacer()
+                Button(isEditingProviders ? "完成" : "编辑") {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isEditingProviders.toggle()
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isEditingProviders ? StatusPopoverStyle.selectionColor : StatusPopoverStyle.secondaryText)
+            }
 
             VStack(spacing: 1) {
-                ForEach(AIProvider.primaryProviders + (showsAdditionalProviders ? AIProvider.additionalProviders : [])) { provider in
-                    VStack(spacing: 0) {
-                        HStack(spacing: layoutMode.spacing(8)) {
-                            AIProviderIcon(provider: provider, size: 16)
-                                .saturation(providerSelection.isSelected(provider) ? 1 : 0)
-                                .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
-                            Text(provider.name).font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.primary.opacity(providerSelection.isSelected(provider) ? 0.88 : 0.30))
-                            if !provider.isImplemented {
-                                Text("未接入").font(.system(size: 9)).foregroundStyle(.secondary)
+                ForEach(orderedProviderSettings) { provider in
+                    if isEditingProviders {
+                        providerSettingsRow(provider)
+                            .draggable(provider.rawValue)
+                            .dropDestination(for: String.self) { droppedValues, _ in
+                                return reorderProvider(droppedValues, before: provider)
                             }
-                            Spacer()
-                            if provider == .codex {
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.18)) { showsAccounts.toggle() }
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        accountAvatar(currentAccount)
-                                        Text(currentAccount?.displayName.components(separatedBy: "@").first ?? "账号")
-                                            .lineLimit(1).frame(maxWidth: 75)
-                                        Image(systemName: showsAccounts ? "chevron.up" : "chevron.down")
-                                    }
-                                    .font(.system(size: 10))
-                                    .padding(4)
-                                    .background(StatusPopoverStyle.selectedTile, in: RoundedRectangle(cornerRadius: 6))
-                                }.buttonStyle(.plain)
-                                    .disabled(!providerSelection.isSelected(provider))
-                                    .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
-                            }
-                            if provider == .claude {
-                                Button("账号") { showsClaudeAccounts.toggle() }
-                                    .buttonStyle(.plain).font(.system(size: 10))
-                                    .disabled(!providerSelection.isSelected(provider))
-                            }
-                            Toggle("显示 \(provider.name)", isOn: Binding(
-                                get: { providerSelection.isSelected(provider) },
-                                set: { value in
-                                    if value != providerSelection.isSelected(provider) { providerSelection.toggle(provider) }
-                                }
-                            ))
-                            .labelsHidden().toggleStyle(.switch).controlSize(.mini)
-                            .tint(StatusPopoverStyle.selectionColor)
-                            .disabled(providerSelection.isSelected(provider) && providerSelection.selectedProviders.count == 1)
-                        }
-                        .padding(layoutMode.spacing(10))
-                        if provider == .codex && showsAccounts && providerSelection.isSelected(provider) {
-                            Divider()
-                            accountSection.padding(layoutMode.spacing(10))
-                        }
-                        if provider == .claude && showsClaudeAccounts && providerSelection.isSelected(provider) {
-                            Divider()
-                            ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, onInteraction: onDirectionMenuPresented).padding(layoutMode.spacing(10))
-                        }
+                    } else {
+                        providerSettingsRow(provider)
                     }
-                    .background(StatusPopoverStyle.tile)
                 }
             }
             .background(StatusPopoverStyle.divider)
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            if !AIProvider.additionalProviders.isEmpty {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { showsAdditionalProviders.toggle() }
-                } label: {
-                    Label(showsAdditionalProviders ? "收起客户端" : "更多客户端（\(AIProvider.additionalProviders.count)）",
-                          systemImage: showsAdditionalProviders ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity).padding(.vertical, 5).contentShape(Rectangle())
-                }.buttonStyle(.plain)
+        }
+    }
+
+    private var orderedProviderSettings: [AIProvider] {
+        let providers = providerSelection.orderedProviders
+        let selected = providers.filter { providerSelection.isSelected($0) }
+        let unselected = providers.filter { !providerSelection.isSelected($0) }
+        return selected + unselected
+    }
+
+    private func providerSettingsRow(_ provider: AIProvider) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: layoutMode.spacing(8)) {
+                AIProviderIcon(provider: provider, size: 16)
+                    .saturation(providerSelection.isSelected(provider) ? 1 : 0)
+                    .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
+                if isEditingProviders {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.55))
+                        .help("拖动调整客户端顺序")
+                }
+                Text(provider.name).font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary.opacity(providerSelection.isSelected(provider) ? 0.88 : 0.30))
+                if !provider.isImplemented {
+                    Text("未接入").font(.system(size: 9)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if provider == .codex {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) { showsAccounts.toggle() }
+                    } label: {
+                        HStack(spacing: 4) {
+                            accountAvatar(currentAccount)
+                            Text(currentAccount?.displayName.components(separatedBy: "@").first ?? "账号")
+                                .lineLimit(1).frame(maxWidth: 75)
+                            Image(systemName: showsAccounts ? "chevron.up" : "chevron.down")
+                        }
+                        .font(.system(size: 10))
+                        .padding(4)
+                        .background(StatusPopoverStyle.selectedTile, in: RoundedRectangle(cornerRadius: 6))
+                    }.buttonStyle(.plain)
+                        .disabled(!providerSelection.isSelected(provider))
+                        .opacity(providerSelection.isSelected(provider) ? 1 : 0.35)
+                }
+                if provider == .claude {
+                    Button("账号") { showsClaudeAccounts.toggle() }
+                        .buttonStyle(.plain).font(.system(size: 10))
+                        .disabled(!providerSelection.isSelected(provider))
+                }
+                Toggle("显示 \(provider.name)", isOn: Binding(
+                    get: { providerSelection.isSelected(provider) },
+                    set: { value in
+                        if value != providerSelection.isSelected(provider) { providerSelection.toggle(provider) }
+                    }
+                ))
+                .labelsHidden().toggleStyle(.switch).controlSize(.mini)
+                .tint(StatusPopoverStyle.selectionColor)
+                .disabled(providerSelection.isSelected(provider) && providerSelection.selectedProviders.count == 1)
+            }
+            .padding(layoutMode.spacing(10))
+            .contentShape(Rectangle())
+            if provider == .codex && showsAccounts && providerSelection.isSelected(provider) {
+                Divider()
+                accountSection.padding(layoutMode.spacing(10))
+            }
+            if provider == .claude && showsClaudeAccounts && providerSelection.isSelected(provider) {
+                Divider()
+                ClaudeAccountsView(accounts: store.claudeAccounts, hasRunningTasks: store.runningTaskCount(for: .claude) > 0, onInteraction: onDirectionMenuPresented).padding(layoutMode.spacing(10))
             }
         }
+        .background(StatusPopoverStyle.tile)
+    }
+
+    private func reorderProvider(_ droppedValues: [String], before provider: AIProvider) -> Bool {
+        guard let rawValue = droppedValues.first,
+              let draggedProvider = AIProvider(rawValue: rawValue),
+              draggedProvider != provider,
+              providerSelection.isSelected(draggedProvider) == providerSelection.isSelected(provider)
+        else { return false }
+
+        providerSelection.move(draggedProvider, relativeTo: provider)
+        return true
     }
 
     private var taskPreviewRow: some View {
@@ -1046,7 +1097,7 @@ struct StatusPopoverView: View {
             }
             .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
-            .help("仅在没有运行中任务时，通过 Codex app-server 创建临时线程并发送：你好。请只回复一句简短的问候，不要执行任何操作。请求可能消耗额度。")
+            .help("通过 Codex app-server 创建独立临时线程发送：你好。请只回复一句简短的问候，不要执行任何操作。不会阻塞或修改正在运行的任务，但请求可能消耗额度。")
         }
     }
 

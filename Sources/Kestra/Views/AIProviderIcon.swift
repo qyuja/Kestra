@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 enum AIProviderLogoCatalog {
     private static var cache = [String: NSImage]()
+    private static let supportedExtensions = ["png", "svg"]
 
     static func image(for provider: AIProvider) -> NSImage? {
         let resourceName = provider.logoResourceName
@@ -11,19 +12,23 @@ enum AIProviderLogoCatalog {
             return cachedImage
         }
 
-        guard let resourceURL = KestraResourceBundle.bundle.url(
-            forResource: resourceName,
-            withExtension: "png"
-        ), let image = NSImage(contentsOf: resourceURL) else {
-            return nil
+        for fileExtension in supportedExtensions {
+            guard let resourceURL = KestraResourceBundle.bundle.url(
+                forResource: resourceName,
+                withExtension: fileExtension
+            ), let image = NSImage(contentsOf: resourceURL) else {
+                continue
+            }
+
+            // Icons8's source artwork is monochrome and transparent. Keeping it
+            // as a template lets each surface choose an adaptive tint while the
+            // provider's recognizable silhouette remains intact.
+            image.isTemplate = true
+            cache[resourceName] = image
+            return image
         }
 
-        // Icons8's source artwork is monochrome and transparent. Keeping it
-        // as a template lets each surface choose an adaptive tint while the
-        // provider's recognizable silhouette remains intact.
-        image.isTemplate = true
-        cache[resourceName] = image
-        return image
+        return nil
     }
 }
 

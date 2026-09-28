@@ -17,6 +17,28 @@ struct MenuBarAppearanceRedrawGate {
     }
 }
 
+enum MenuBarRunningProviderSelector {
+    static func select(
+        _ candidates: [(provider: AIProvider, tasks: [CodexTask])]
+    ) -> AIProvider? {
+        var selected: (provider: AIProvider, count: Int, latestActivity: Date)?
+
+        for candidate in candidates where !candidate.tasks.isEmpty {
+            let latestActivity = candidate.tasks
+                .map { max($0.startedAt ?? $0.updatedAt, $0.updatedAt) }
+                .max() ?? .distantPast
+
+            if selected == nil
+                || candidate.tasks.count > selected!.count
+                || (candidate.tasks.count == selected!.count && latestActivity > selected!.latestActivity) {
+                selected = (candidate.provider, candidate.tasks.count, latestActivity)
+            }
+        }
+
+        return selected?.provider
+    }
+}
+
 @MainActor
 final class IslandStatusItemController: NSObject {
     private let statusItem: NSStatusItem
@@ -172,6 +194,7 @@ final class IslandStatusItemController: NSObject {
         updateLogoRotation(
             isRunning: runningCount > 0
                 && squatRunner.selectedIconID == MenuBarIconPluginCatalog.statusIconID
+                && displayedProvider != .ohMyPi
         )
         button.attributedTitle = NSAttributedString(string: "")
         button.title = ""
@@ -311,15 +334,11 @@ final class IslandStatusItemController: NSObject {
     }
 
     private var runningProvider: AIProvider? {
-        var selected: (provider: AIProvider, count: Int)?
-        for provider in providerSelection.selectedProviders {
-            let count = store.runningTaskCount(for: provider)
-            guard count > 0 else { continue }
-            if selected == nil || count > selected!.count {
-                selected = (provider, count)
+        MenuBarRunningProviderSelector.select(
+            providerSelection.selectedProviders.map {
+                (provider: $0, tasks: store.runningTasks(for: $0))
             }
-        }
-        return selected?.provider
+        )
     }
 
     private var displayedProvider: AIProvider? {

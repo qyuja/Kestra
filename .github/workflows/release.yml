@@ -37,6 +37,7 @@ jobs:
         run: |
           swift test
           node script/test_pi.mjs
+          node script/test_omp.mjs
           node script/test_opencode.mjs
 
       - name: Resolve release tag

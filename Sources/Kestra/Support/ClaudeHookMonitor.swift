@@ -40,7 +40,7 @@ final class ClaudeHookMonitor {
 
     static func receiveEvent(provider: AIProvider = .claude) {
         if provider == .claude && ProcessInfo.processInfo.environment["GROK_SESSION_ID"] != nil { return }
-        let eventsDirectory = provider == .claude ? Self.eventsDirectory : Self.eventsDirectory.deletingLastPathComponent().appendingPathComponent(provider.rawValue + "-events")
+        let eventsDirectory = provider == .claude ? Self.eventsDirectory : Self.eventsDirectory.deletingLastPathComponent().appendingPathComponent(provider.eventDirectoryName)
         do {
             let data = FileHandle.standardInput.readDataToEndOfFile()
             guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
