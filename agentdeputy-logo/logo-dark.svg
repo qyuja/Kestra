@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 208" role="img" aria-labelledby="title desc">
+  <title id="title">AgentDeputy logo — dark appearance</title>
+  <desc id="desc">AgentDeputy wordmark beside layered account and task panels, a coding chevron, and a task status dot.</desc>
+  <g transform="translate(18 14) scale(.70)">
+    <path d="M46 162V78C46 60.327 60.327 46 78 46H160" fill="none" stroke="#F1F5F9" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M162 82H110C92.327 82 78 96.327 78 114V182C78 199.673 92.327 214 110 214H178C195.673 214 210 199.673 210 182V126" fill="none" stroke="#8B8CFF" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M124 125L150 148L124 171" fill="none" stroke="#8B8CFF" stroke-width="17" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="210" cy="82" r="16" fill="#8B8CFF"/>
+  </g>
+  <text x="210" y="126" fill="#F1F5F9" font-family="'Helvetica Neue', Arial, sans-serif" font-size="64" font-weight="600" letter-spacing="-1.7">AgentDeputy</text>
+</svg>

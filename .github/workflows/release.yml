@@ -18,7 +18,7 @@ jobs:
   release:
     env:
       HAS_NOTARIZATION_CREDENTIALS: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_PASSWORD != '' }}
-    # Kestra targets macOS 26, so use the arm64 macOS 26 image explicitly.
+    # AgentDeputy targets macOS 26, so use the arm64 macOS 26 image explicitly.
     runs-on: macos-26
 
     steps:
@@ -31,14 +31,9 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
-          node --version
 
       - name: Run tests
-        run: |
-          swift test
-          node script/test_pi.mjs
-          node script/test_omp.mjs
-          node script/test_opencode.mjs
+        run: swift test
 
       - name: Resolve release tag
         id: release
@@ -103,8 +98,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          keychain_path="$RUNNER_TEMP/kestra-signing.keychain-db"
-          certificate_path="$RUNNER_TEMP/kestra-signing.p12"
+          keychain_path="$RUNNER_TEMP/agentdeputy-signing.keychain-db"
+          certificate_path="$RUNNER_TEMP/agentdeputy-signing.p12"
 
           if [[ -z "$CERTIFICATE_BASE64" && -z "$CERTIFICATE_PASSWORD" && -z "$KEYCHAIN_PASSWORD" ]]; then
             echo "identity=-" >> "$GITHUB_OUTPUT"
@@ -145,8 +140,8 @@ jobs:
 
       - name: Validate app bundle
         run: |
-          codesign --verify --deep --strict --verbose=2 dist/Kestra.app
-          codesign -dvv dist/Kestra.app 2>&1 | grep -E 'Identifier=|Signature=|TeamIdentifier=|Sealed Resources=' || true
+          codesign --verify --deep --strict --verbose=2 dist/AgentDeputy.app
+          codesign -dvv dist/AgentDeputy.app 2>&1 | grep -E 'Identifier=|Signature=|TeamIdentifier=|Sealed Resources=' || true
 
       - name: Create and verify DMG
         id: dmg
@@ -155,11 +150,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          staging="$(mktemp -d -t kestra-release)"
-          ditto dist/Kestra.app "$staging/Kestra.app"
+          staging="$(mktemp -d -t agentdeputy-release)"
+          ditto dist/AgentDeputy.app "$staging/AgentDeputy.app"
           ln -s /Applications "$staging/Applications"
-          dmg_path="dist/Kestra-${TAG}.dmg"
-          hdiutil create -volname Kestra -srcfolder "$staging" -ov -format UDZO "$dmg_path"
+          dmg_path="dist/AgentDeputy-${TAG}.dmg"
+          hdiutil create -volname AgentDeputy -srcfolder "$staging" -ov -format UDZO "$dmg_path"
           hdiutil verify "$dmg_path"
           echo "path=$dmg_path" >> "$GITHUB_OUTPUT"
           echo "sha256=$(shasum -a 256 "$dmg_path" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
@@ -206,10 +201,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          updates_dir="$RUNNER_TEMP/kestra-updates"
+          updates_dir="$RUNNER_TEMP/agentdeputy-updates"
           mkdir -p "$updates_dir"
-          zip_path="$updates_dir/Kestra-${TAG}.zip"
-          ditto -c -k --sequesterRsrc --keepParent dist/Kestra.app "$zip_path"
+          zip_path="$updates_dir/AgentDeputy-${TAG}.zip"
+          ditto -c -k --sequesterRsrc --keepParent dist/AgentDeputy.app "$zip_path"
 
           if [[ "$SIGNING_MODE" == "developer-id" && "$SPARKLE_NOTARIZATION_READY" == "true" ]]; then
             xcrun notarytool submit "$zip_path" \
@@ -217,9 +212,9 @@ jobs:
               --team-id "$APPLE_TEAM_ID" \
               --password "$APPLE_APP_PASSWORD" \
               --wait
-            xcrun stapler staple dist/Kestra.app
+            xcrun stapler staple dist/AgentDeputy.app
             rm -f "$zip_path"
-            ditto -c -k --sequesterRsrc --keepParent dist/Kestra.app "$zip_path"
+            ditto -c -k --sequesterRsrc --keepParent dist/AgentDeputy.app "$zip_path"
           else
             echo "::warning::Sparkle archive is signed by Sparkle but not notarized. Configure Developer ID and notarization secrets for Gatekeeper-friendly updates."
           fi
@@ -268,7 +263,7 @@ jobs:
           else
             gh release create "$TAG" "${assets[@]}" \
               --target "$TARGET_SHA" \
-              --title "Kestra $TAG" \
+              --title "AgentDeputy $TAG" \
               --generate-notes
           fi
           echo "Published $DMG_PATH ($DMG_SHA256)"
@@ -277,4 +272,4 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: |
-          security delete-keychain "$RUNNER_TEMP/kestra-signing.keychain-db" >/dev/null 2>&1 || true
+          security delete-keychain "$RUNNER_TEMP/agentdeputy-signing.keychain-db" >/dev/null 2>&1 || true

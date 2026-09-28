@@ -1,9 +1,9 @@
 # Menu bar icon plugins
 
-Kestra can load resource-only icon plugins from:
+AgentDeputy can load resource-only icon plugins from:
 
 ```text
-~/Library/Application Support/com.kiannest.kestra/icon-plugins
+~/Library/Application Support/com.kiannest.agentdeputy/icon-plugins
 ```
 
 Create one subdirectory per plugin and put a `manifest.json` in it. A plugin
@@ -21,7 +21,7 @@ uses either PNG frames or a macOS system symbol:
 The supported fields are `schemaVersion`, `id`, `name`, optional `frames`
 (relative PNG paths), optional `systemSymbol`, optional `idleFrame`, and
 optional `cycleDuration` in seconds. `frames` and `systemSymbol` are mutually
-exclusive. The built-in IDs `barbell-squat`, `kestra-logo`, and `sparkles` cannot
+exclusive. The built-in IDs `barbell-squat`, `agentdeputy-logo`, and `sparkles` cannot
 be replaced.
 
 Installation and refresh
@@ -47,4 +47,4 @@ Plugin authors are responsible for the licenses of their own PNG assets. This
 example contains no image asset and uses the macOS `circle` SF Symbol, which
 is subject to Apple's SF Symbols license and the platform's usage terms. The
 built-in barbell-squat artwork remains covered by the Apache-2.0 notice in
-`Sources/Kestra/Resources/RunnerGallery-LICENSE.txt`.
+`Sources/AgentDeputy/Resources/RunnerGallery-LICENSE.txt`.

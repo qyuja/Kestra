@@ -3,30 +3,31 @@
 import PackageDescription
 
 let package = Package(
-    name: "Kestra",
+    name: "AgentDeputy",
     platforms: [
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "Kestra", targets: ["Kestra"])
+        .executable(name: "AgentDeputy", targets: ["AgentDeputy"])
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.6")
     ],
     targets: [
         .executableTarget(
-            name: "Kestra",
+            name: "AgentDeputy",
             dependencies: [
                 .product(name: "Sparkle", package: "Sparkle")
             ],
-            path: "Sources/Kestra",
+            path: "Sources/AgentDeputy",
             resources: [
-                .process("Resources")
+                .process("Resources"),
+                .copy("../../agentdeputy-logo/logo-template.svg")
             ]
         ),
         .testTarget(
-            name: "KestraTests",
-            dependencies: ["Kestra"]
+            name: "AgentDeputyTests",
+            dependencies: ["AgentDeputy"]
         )
     ]
 )

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 MODE="${1:-run}"
-BUILD_PRODUCT_NAME="Kestra"
+BUILD_PRODUCT_NAME="AgentDeputy"
 MIN_SYSTEM_VERSION="26.0"
 BUILD_CONFIGURATION="${BUILD_CONFIGURATION:-debug}"
 APP_VERSION="${APP_VERSION:-1.0}"
@@ -20,13 +20,13 @@ case "$MODE" in
 esac
 
 if [[ "$IS_DEVELOPMENT_APP" == true ]]; then
-  APP_NAME="KestraDev"
-  DISPLAY_NAME="Kestra Dev"
-  BUNDLE_ID="com.kiannest.kestra.dev"
+  APP_NAME="AgentDeputyDev"
+  DISPLAY_NAME="AgentDeputy Dev"
+  BUNDLE_ID="com.kiannest.agentdeputy.dev"
 else
-  APP_NAME="Kestra"
-  DISPLAY_NAME="Kestra"
-  BUNDLE_ID="com.kiannest.kestra"
+  APP_NAME="AgentDeputy"
+  DISPLAY_NAME="AgentDeputy"
+  BUNDLE_ID="com.kiannest.agentdeputy"
 fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -49,10 +49,10 @@ swift build --configuration "$BUILD_CONFIGURATION"
 BUILD_BIN_DIR="$(swift build --configuration "$BUILD_CONFIGURATION" --show-bin-path)"
 BUILD_BINARY="$BUILD_BIN_DIR/$BUILD_PRODUCT_NAME"
 BUILD_RESOURCE_BUNDLE="$BUILD_BIN_DIR/${BUILD_PRODUCT_NAME}_${BUILD_PRODUCT_NAME}.bundle"
-BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/Contents/Resources/Kestra.icns"
+BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/Contents/Resources/AgentDeputy.icns"
 if [[ ! -f "$BUILD_APP_ICON" ]]; then
   # SwiftPM used a flat resource-bundle layout on older Xcode images.
-  BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/Kestra.icns"
+  BUILD_APP_ICON="$BUILD_RESOURCE_BUNDLE/AgentDeputy.icns"
 fi
 
 rm -rf "$APP_BUNDLE"
@@ -61,7 +61,7 @@ cp "$BUILD_BINARY" "$APP_BINARY"
 chmod +x "$APP_BINARY"
 cp -R "$BUILD_RESOURCE_BUNDLE" "$APP_RESOURCES/"
 test -f "$BUILD_APP_ICON"
-cp "$BUILD_APP_ICON" "$APP_RESOURCES/Kestra.icns"
+cp "$BUILD_APP_ICON" "$APP_RESOURCES/AgentDeputy.icns"
 ditto "$BUILD_BIN_DIR/Sparkle.framework" "$APP_FRAMEWORKS/Sparkle.framework"
 install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_BINARY"
 
@@ -114,7 +114,7 @@ cat >"$INFO_PLIST" <<PLIST
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
   <key>CFBundleIconFile</key>
-  <string>Kestra.icns</string>
+  <string>AgentDeputy.icns</string>
 $SPARKLE_PLIST
 </dict>
 </plist>

@@ -1,27 +1,29 @@
-# Kestra
+# AgentDeputy
 
-![Kestra logo](kestra-logo/logo.png)
+![AgentDeputy logo](agentdeputy-logo/logo.png)
 
-Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达：在后台监听本地 agent 客户端，把运行中任务数、任务摘要和完成提醒放到一个随时可见的状态栏入口里。
+AgentDeputy 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达：在后台监听本地 agent 客户端，把运行中任务数、任务摘要和完成提醒放到一个随时可见的状态栏入口里。
 
 ## 功能
 
-- 状态栏图标显示运行状态；默认使用 Barbell Squat runner：没有任务时站立，有任务时深蹲，并发任务越多速度越快。
+- 状态栏图标显示运行状态；可选择客户端状态、Barbell Squat runner 或 AgentDeputy Logo。
 - 任务 popover 中查看 Active / Recent 任务、thread name、最近一条 user 对话摘要、模型和 effort。
 - 支持客户端 tab、任务展开收起、运行时长和完成时间展示。
 - 任务完成后从屏幕指定位置弹出可点击的完成提醒，支持边、角和中心位置，以及独立的 In / Out 动画、速度和停留时长设置。
 - 账号管理和手动切换目前面向 Codex / ChatGPT 与 Claude Code；切换前会阻止仍有运行任务的账号操作。
 - Codex 额度按 30 秒在后台轮询；可选在检测到额度窗口重置后，发送一次“只打招呼、不执行操作”的临时问候来尽早刷新额度状态。
 - 设置中支持使用 macOS 原生登录项注册开机自启动。
-- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项包含深蹲 runner、Kestra Logo 和星芒。
+- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项包含深蹲 runner、AgentDeputy Logo 和星芒。
+- 选择 AgentDeputy Logo 后，运行中任务会触发外层线条顺时针沿边缘移动的动画；空闲时恢复原始 SVG 图形。
 
 ## 已接入的任务来源
 
-目前代码包含以下本地客户端适配：
+目前只接入以下两个本地客户端：
 
 - Codex / ChatGPT：通过本地 `codex app-server` 和 session 状态读取任务。
 - Claude Code：通过 CLI Hooks 读取任务，并提供账号登记、重登和手动切换。
-- Cursor、Pi、oh-my-pi、OpenCode、Gemini CLI、Qwen Code、Grok Build、WorkBuddy：通过各自的本地 Hook / 插件协议接入；其中部分仍属于实验性适配，真实客户端版本和模式需要单独验证。oh-my-pi 按 OMP 配置安装到当前 profile 和其他已发现的 profile 的 `agent/extensions`（尊重 `PI_CONFIG_DIR` 和默认 profile 的 `PI_CODING_AGENT_DIR`）；连接后重启 `omp`，新建 profile 后点击“同步 OMP Profiles”。只监听使用工具的 coding work，普通聊天会被忽略。
+
+旧版可能已在其他客户端配置中安装 Kestra Hook / 扩展；新版本不会改写这些外部配置。Claude Code 的旧 Hook 若仍指向 Kestra.app，设置页会显示未连接，需手动重新接入 AgentDeputy。若要彻底清理已退役的其他客户端 Hook，请在对应客户端中手动移除。
 
 这里只监听 coding/work agent 的任务，不把普通网站聊天或纯聊天模型本身当作任务来源。模型和 effort 是任务属性。
 
@@ -30,14 +32,14 @@ Kestra 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达�
 要求：macOS 26、Swift 6.2 或更新版本。
 
 ```bash
-git clone https://github.com/qyuja/Kestra.git
-cd Kestra
+git clone https://github.com/qyuja/Kestra.git AgentDeputy
+cd AgentDeputy
 
 swift test
 ./script/build_and_run.sh
 ```
 
-直接运行脚本会构建并打开隔离的 `dist/KestraDev.app`，不会关闭或复用已安装的 `/Applications/Kestra.app`。需要生成 production-shaped bundle 但不启动应用时使用：
+直接运行脚本会构建并打开隔离的 `dist/AgentDeputyDev.app`，不会关闭或复用已安装的 `/Applications/Kestra.app`。需要生成 production-shaped bundle 但不启动应用时使用：
 
 ```bash
 ./script/build_and_run.sh package
@@ -55,14 +57,6 @@ swift test
 SPARKLE_ENABLED=true ./script/build_and_run.sh package
 ```
 
-协议适配器的隔离测试：
-
-```bash
-node script/test_pi.mjs
-node script/test_omp.mjs
-node script/test_opencode.mjs
-```
-
 发布 DMG：
 
 ```bash
@@ -70,7 +64,7 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-也可以使用发布脚本。脚本要求工作树已经提交干净，会先运行 Swift 和协议适配器测试，再推送当前分支并创建、推送版本 tag：
+也可以使用发布脚本。脚本要求工作树已经提交干净，会先运行 Swift 测试，再推送当前分支并创建、推送版本 tag：
 
 ```bash
 ./script/push_release.sh 0.1.14
@@ -82,19 +76,19 @@ git push origin v0.1.1
 ./script/push_release.sh --dry-run 0.1.14
 ```
 
-推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `Kestra-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
+推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `AgentDeputy-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
 
 Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeeper。要让其他 Mac 直接双击打开，需要在仓库 Secrets 配置 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_KEYCHAIN_PASSWORD`，以及 notarization 所需的 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD`。
 
 自动更新发布还需要配置 `SPARKLE_ED25519_PRIVATE_KEY` Secret。它只用于 GitHub Actions 给更新 archive 和 appcast 签名，不能提交到仓库。没有这个 Secret 时，Actions 仍会发布 DMG，但不会把该版本作为应用内自动更新源发布。
 
-应用是状态栏应用，不创建常规控制窗口。`run` 模式使用独立的 `KestraDev` 进程和数据目录；`package` 模式在 `dist/Kestra.app` 生成经过完整 bundle 校验的包，不会终止正在运行的应用。没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
+应用是状态栏应用，不创建常规控制窗口。`run` 模式使用独立的 `AgentDeputyDev` 进程和数据目录；`package` 模式在 `dist/AgentDeputy.app` 生成经过完整 bundle 校验的包，不会终止正在运行的应用。没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
 
-如果下载后 macOS 提示无法验证开发者或应用不安全，请先确认 DMG 来源可信，将 `Kestra.app` 拖入“应用程序”，再执行（命令是 `xattr`，不是 `xttr`）：
+如果下载后 macOS 提示无法验证开发者或应用不安全，请先确认 DMG 来源可信，将 `AgentDeputy.app` 拖入“应用程序”，再执行（命令是 `xattr`，不是 `xttr`）：
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Kestra.app
-open /Applications/Kestra.app
+xattr -dr com.apple.quarantine /Applications/AgentDeputy.app
+open /Applications/AgentDeputy.app
 ```
 
 ## 图标插件
@@ -102,7 +96,7 @@ open /Applications/Kestra.app
 插件目录为：
 
 ```text
-~/Library/Application Support/com.kiannest.kestra/icon-plugins
+~/Library/Application Support/com.kiannest.agentdeputy/icon-plugins
 ```
 
 每个子目录包含一个 `manifest.json`，资源插件支持：
@@ -120,10 +114,10 @@ open /Applications/Kestra.app
 
 ## 本地数据和隐私边界
 
-- Kestra 的任务监听在本机完成，不上传任务标题、对话摘要或 Hook 事件到 Kestra 服务。
-- Codex、Claude Code 和其他客户端仍按它们自己的协议访问各自服务；Kestra 不替换模型请求。
+- AgentDeputy 的任务监听完全在本机完成；任务标题、对话摘要和 Hook 事件不会上传到任何服务。
+- Codex 与 Claude Code 仍按各自协议访问服务；AgentDeputy 不替换模型请求。
 - 账号切换只保存必要的本地账号元数据；凭据保存在客户端文件或 macOS 钥匙串中，不写入任务列表、README、日志或 Git 仓库。
-- 应用数据默认位于 `~/Library/Application Support/com.kiannest.kestra/`；Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
+- 应用数据默认位于 `~/Library/Application Support/com.kiannest.agentdeputy/`；首次启动会复制旧 Kestra 数据与设置，旧目录保留。Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
 - 应用不会扫描或上传完整历史；任务预览只读取界面需要的截断内容。
 - 额度唤醒只处理本地 Codex app-server 返回的额度快照。开启后，在检测到重置时，会通过独立临时线程向对应账号发送一次真实问候请求；该请求可能消耗额度，临时线程不会写入持久会话，也不会阻塞运行中的任务。
 
@@ -131,9 +125,9 @@ open /Applications/Kestra.app
 
 - 默认发布链路仍允许 ad-hoc 签名；没有 Developer ID 和 notarization 时，DMG 和自动更新包可以做结构验证，但其他 Mac 可能仍需要右键打开或移除 quarantine。
 - 自动更新依赖 GitHub Release 的 `appcast.xml` 和 Sparkle Ed25519 签名；发布前必须配置 `SPARKLE_ED25519_PRIVATE_KEY`，并建议同时配置 Developer ID/notarization。
-- 额度重置检测需要 Codex 返回稳定的 `resetsAt` 和明显恢复的剩余额度；数据缺失或无法确认重置时不会发送。当前只有 Codex app-server 接入了这条额度唤醒链路，其他客户端暂未提供同等协议。
-- 各客户端 Hook / 插件协议会随客户端版本变化；协议单元测试不等于真实客户端端到端验证。
-- 客户端被强制结束且没有产生结束事件时，Kestra 无法凭本地协议准确推断任务已结束。
+- 额度重置检测需要 Codex 返回稳定的 `resetsAt` 和明显恢复的剩余额度；数据缺失或无法确认重置时不会发送。当前只有 Codex app-server 接入了这条额度唤醒链路，Claude Code 暂无同等协议。
+- Codex app-server 与 Claude Code Hook 协议会随客户端版本变化；单元测试不等于真实客户端端到端验证。
+- 客户端被强制结束且没有产生结束事件时，AgentDeputy 无法凭本地协议准确推断任务已结束。
 - Claude Code 的真实账号切换尚未完成双账号端到端验收；不应把隔离测试当成真实登录验证。
 - `ProviderLogos` 中的图标来自第三方资源。它们不属于本项目 MIT 许可证覆盖范围，重新分发前请核对 Icons8 的授权和 attribution 要求，或替换为自有资源。
 
@@ -147,4 +141,4 @@ open /Applications/Kestra.app
 
 ## 许可证
 
-Kestra 源码采用 [MIT License](LICENSE)。第三方资源、客户端 SDK、商标和服务仍受各自的许可证或使用条款约束。
+AgentDeputy 源码采用 [MIT License](LICENSE)。第三方资源、客户端 SDK、商标和服务仍受各自的许可证或使用条款约束。

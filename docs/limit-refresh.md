@@ -1,12 +1,12 @@
 # Codex 额度唤醒
 
-Kestra 可以选择在 Codex 额度窗口重置后，尽早发送一次很短的问候请求。它的目的不是执行任务，而是让 Codex 尽早产生一次使用记录，避免等到用户下一次工作时才触发请求。
+AgentDeputy 可以选择在 Codex 额度窗口重置后，尽早发送一次很短的问候请求。它的目的不是执行任务，而是让 Codex 尽早产生一次使用记录，避免等到用户下一次工作时才触发请求。
 
 ## 行为
 
 - Codex 账号额度由现有的后台监控器按 30 秒轮询。
 - 设置页中的“限额重置后发送问候”默认关闭，必须由用户主动开启。
-- Kestra 为每个已启用的 Codex 账号保存上一次 `primary` / `secondary` 额度快照。
+- AgentDeputy 为每个已启用的 Codex 账号保存上一次 `primary` / `secondary` 额度快照。
 - 只有同时满足以下条件，才会记录待发送事件：
   - 上一次和当前快照都包含 `resetsAt`；
   - 当前 `resetsAt` 已跨过上一次观察到的时间边界，并且变化超过 60 秒；
@@ -32,9 +32,9 @@ Kestra 可以选择在 Codex 额度窗口重置后，尽早发送一次很短的
 待发送事件和最近快照保存在：
 
 ```text
-~/Library/Application Support/com.kiannest.kestra/task-bridge/limit-refresh.json
+~/Library/Application Support/com.kiannest.agentdeputy/task-bridge/limit-refresh.json
 ```
 
 文件权限为 `0600`，目录权限为 `0700`。关闭功能后不会补发关闭期间发生的重置；重新开启后只处理之后新观察到的重置和之前已经持久化的待发送事件。
 
-当前这条链路只支持 Codex app-server。Claude Code 等其他客户端的任务监听不等于已有额度读取或消息发送协议，因此不会被这项功能误用。
+当前这条链路只支持 Codex app-server。Claude Code 的任务监听不等于已有额度读取或消息发送协议，因此不会被这项功能误用。
