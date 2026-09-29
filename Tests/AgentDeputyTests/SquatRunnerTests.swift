@@ -21,7 +21,7 @@ final class SquatRunnerTests: XCTestCase {
     }
 
     @MainActor
-    func testLoadsFramesAndPersistedCount() {
+    func testMigratesRetiredIconSelectionsToLogo() {
         let suite = "SquatRunnerTests." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         let pluginsDirectory = makeTemporaryDirectory()
@@ -29,14 +29,17 @@ final class SquatRunnerTests: XCTestCase {
             defaults.removePersistentDomain(forName: suite)
             try? FileManager.default.removeItem(at: pluginsDirectory)
         }
-        defaults.set(42, forKey: "runner.barbellSquat.completedCount")
-        let runner = SquatRunner(defaults: defaults, pluginsDirectory: pluginsDirectory)
-        XCTAssertEqual(runner.total, 42)
-        XCTAssertNotNil(runner.image)
+        for retiredID in ["barbell-squat", "sparkles"] {
+            defaults.set(retiredID, forKey: "runner.menuBarIcon.selectedIconID")
+            let runner = SquatRunner(defaults: defaults, pluginsDirectory: pluginsDirectory)
+            XCTAssertEqual(runner.selectedIconID, "agentdeputy-logo")
+            XCTAssertEqual(defaults.string(forKey: "runner.menuBarIcon.selectedIconID"), "agentdeputy-logo")
+            XCTAssertNotNil(runner.image)
+        }
     }
 
     @MainActor
-    func testBuiltInOptionsAndStaticSparklesDoNotChangeSquatTotal() {
+    func testBuiltInOptionsExcludeRetiredIcons() {
         let suite = "SquatRunnerTests." + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         let pluginsDirectory = makeTemporaryDirectory()
@@ -46,17 +49,11 @@ final class SquatRunnerTests: XCTestCase {
         }
 
         let runner = SquatRunner(defaults: defaults, pluginsDirectory: pluginsDirectory)
-        XCTAssertEqual(runner.options.map(\.id), ["client-status", "barbell-squat", "agentdeputy-logo", "sparkles"])
+        XCTAssertEqual(runner.options.map(\.id), ["client-status", "agentdeputy-logo"])
         XCTAssertEqual(runner.selectedIconID, "client-status")
 
         runner.selectIcon("agentdeputy-logo")
         XCTAssertNotNil(runner.image)
-        runner.update(runningCount: 3)
-        XCTAssertEqual(runner.total, 0)
-
-        runner.selectIcon("sparkles")
-        XCTAssertNotNil(runner.image)
-        XCTAssertEqual(runner.total, 0)
     }
 
     @MainActor

@@ -58,6 +58,7 @@ final class IslandStatusItemController: NSObject {
     private let animationSettings: CompletionAnimationSettingsStore
     private lazy var previewController = CodexCompletionPanelController(
         onOpenTask: { _ in },
+        onPermissionDecision: { _, _ in false },
         animationRegistry: animationPlugins,
         animationSettings: animationSettings,
         themeStore: themeStore
@@ -273,7 +274,7 @@ final class IslandStatusItemController: NSObject {
             )
         } else {
             drawSystemSymbol(
-                "figure.strengthtraining.traditional",
+                "circle",
                 in: NSRect(origin: .zero, size: imageSize)
             )
         }

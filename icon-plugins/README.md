@@ -21,8 +21,8 @@ uses either PNG frames or a macOS system symbol:
 The supported fields are `schemaVersion`, `id`, `name`, optional `frames`
 (relative PNG paths), optional `systemSymbol`, optional `idleFrame`, and
 optional `cycleDuration` in seconds. `frames` and `systemSymbol` are mutually
-exclusive. The built-in IDs `barbell-squat`, `agentdeputy-logo`, and `sparkles` cannot
-be replaced.
+exclusive. The built-in IDs `client-status` and `agentdeputy-logo`, plus the retired
+IDs `barbell-squat` and `sparkles`, cannot be replaced.
 
 Installation and refresh
 
@@ -31,7 +31,8 @@ Installation and refresh
 2. Use the app's plugin refresh action after adding or replacing a plugin.
    Opening the plugin directory creates it when necessary.
 3. Select the plugin in the app. A missing saved selection falls back to the
-   built-in squat icon and is reported to the app.
+   built-in client-status icon and is reported to the app. Old squat and sparkles
+   selections migrate to the AgentDeputy Logo.
 
 Safety limits
 
@@ -45,6 +46,4 @@ Licensing
 
 Plugin authors are responsible for the licenses of their own PNG assets. This
 example contains no image asset and uses the macOS `circle` SF Symbol, which
-is subject to Apple's SF Symbols license and the platform's usage terms. The
-built-in barbell-squat artwork remains covered by the Apache-2.0 notice in
-`Sources/AgentDeputy/Resources/RunnerGallery-LICENSE.txt`.
+is subject to Apple's SF Symbols license and the platform's usage terms.

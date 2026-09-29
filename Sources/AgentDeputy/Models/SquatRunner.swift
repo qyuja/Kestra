@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 
-/// One loop contains a complete descent and return to standing (frames 0...7).
+/// Advances a frame plugin through one full animation loop.
 struct SquatMotion {
     private(set) var frame = 0
     private var elapsed = 0.0
@@ -49,13 +49,11 @@ struct SquatMotion {
 
 @MainActor
 final class SquatRunner: ObservableObject {
-    @Published private(set) var total: Int
     @Published private(set) var options: [MenuBarIconOption]
     @Published private(set) var selectedIconID: String
     @Published private(set) var pluginErrors: [String]
 
     private let defaults: UserDefaults
-    private let countKey = "runner.barbellSquat.completedCount"
     private static let selectedIconKey = "runner.menuBarIcon.selectedIconID"
     private let pluginsDirectory: URL
     private var plugins: [String: MenuBarIconPlugin] = [:]
@@ -68,9 +66,8 @@ final class SquatRunner: ObservableObject {
     init(defaults: UserDefaults = .standard, pluginsDirectory: URL? = nil) {
         self.defaults = defaults
         self.pluginsDirectory = pluginsDirectory ?? Self.defaultPluginsDirectory
-        total = max(0, defaults.integer(forKey: countKey))
         options = []
-        selectedIconID = MenuBarIconPluginCatalog.squatID
+        selectedIconID = MenuBarIconPluginCatalog.statusIconID
         pluginErrors = []
         reloadPlugins()
     }
@@ -102,8 +99,10 @@ final class SquatRunner: ObservableObject {
         pluginErrors = builtIns.errors + result.errors
 
         let savedID = defaults.string(forKey: Self.selectedIconKey)
-        let requestedID = savedID == MenuBarIconPluginCatalog.previousLogoID
-            ? MenuBarIconPluginCatalog.agentDeputyLogoID : savedID
+        let requestedID = savedID.map {
+            $0 == MenuBarIconPluginCatalog.previousLogoID || MenuBarIconPluginCatalog.retiredIDs.contains($0)
+                ? MenuBarIconPluginCatalog.agentDeputyLogoID : $0
+        }
         if requestedID != savedID, let requestedID {
             defaults.set(requestedID, forKey: Self.selectedIconKey)
         }
@@ -152,15 +151,11 @@ final class SquatRunner: ObservableObject {
         }
 
         let now = ProcessInfo.processInfo.systemUptime
-        // Do not count imaginary repetitions while asleep or the UI is blocked.
+        // Do not advance through a large number of frames after sleep or UI blocking.
         let delta = min(max(0, now - lastTick), 0.08)
         lastTick = now
         let oldFrame = motion.frame
-        let completed = motion.advance(delta)
-        if completed > 0, plugin.countsTowardSquat {
-            total += completed
-            defaults.set(total, forKey: countKey)
-        }
+        _ = motion.advance(delta)
         if motion.frame != oldFrame { onFrame?() }
     }
 

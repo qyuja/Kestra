@@ -44,6 +44,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        if CommandLine.arguments.contains("--codex-attention-hook") {
+            do {
+                let decision = try CodexAttentionHookMonitor.processPermissionRequest()
+                if let output = CodexAttentionHookMonitor.hookOutput(for: decision) {
+                    FileHandle.standardOutput.write(output)
+                }
+            } catch {
+                FileHandle.standardError.write(Data("AgentDeputy: failed to record Codex attention event\n".utf8))
+            }
+            return
+        }
+
         do {
             try AgentDeputyAppIdentity.migrateLegacyState()
         } catch {
@@ -83,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenTask: { task in
                 ApplicationLauncher.openCodexTask(task)
             },
+            onPermissionDecision: { [weak self] event, decision in
+                self?.taskStore.respondToCodexPermission(event, decision: decision) ?? false
+            },
             animationRegistry: completionAnimationRegistry,
             animationSettings: animationSettings,
             themeStore: themeStore
@@ -117,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         taskStore.onTaskCompleted = { [weak self] task in
             self?.completionPanelController?.enqueue(task)
+        }
+        taskStore.onAttentionRequested = { [weak self] task, event in
+            self?.completionPanelController?.enqueueAttention(task, event: event)
         }
         taskStore.start()
         Task {

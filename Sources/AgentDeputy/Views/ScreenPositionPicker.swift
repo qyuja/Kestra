@@ -3,7 +3,7 @@ import SwiftUI
 struct ScreenPositionPicker: View {
     let position: CompletionDisplayPosition
     let onSelect: (CompletionDisplayPosition) -> Void
-    private let tint = Color(red: 0.35, green: 0.86, blue: 0.38)
+    private let tint = AgentDeputyPalette.accent
 
     var body: some View {
         ZStack {

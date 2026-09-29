@@ -1,5 +1,29 @@
+import AppKit
 import Combine
 import Foundation
+import SwiftUI
+
+enum AgentDeputyPalette {
+    // Keep the logo's violet hue, but use a softer, lighter variant over dark
+    // surfaces so selected controls remain legible without a neon effect.
+    private static let lightAccent = NSColor(srgbRed: 91 / 255, green: 92 / 255, blue: 226 / 255, alpha: 1)
+    private static let darkAccent = NSColor(srgbRed: 193 / 255, green: 182 / 255, blue: 1, alpha: 1)
+
+    static func nsColor(for appearance: NSAppearance) -> NSColor {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? darkAccent : lightAccent
+    }
+
+    static let accentNSColor = NSColor(name: nil, dynamicProvider: nsColor(for:))
+    static let accent = Color(nsColor: accentNSColor)
+
+    static func selectedFillNSColor(for appearance: NSAppearance) -> NSColor {
+        let opacity: CGFloat = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? 0.25 : 0.14
+        return nsColor(for: appearance).withAlphaComponent(opacity)
+    }
+
+    static let selectedFill = Color(nsColor: NSColor(name: nil, dynamicProvider: selectedFillNSColor(for:)))
+}
 
 enum AgentDeputyThemeMode: String, CaseIterable, Identifiable {
     case auto

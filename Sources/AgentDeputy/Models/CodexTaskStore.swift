@@ -13,7 +13,36 @@ final class CodexTaskStore: ObservableObject {
     @Published private(set) var lastCompletedTask: CodexTask?
     @Published private(set) var claudeStatus = "正在检查 Claude Code…"
     private let claudeMonitor = ClaudeHookMonitor()
+    private let codexAttentionMonitor = CodexAttentionHookMonitor()
     private var claudeTasks: [CodexTask] = []
+    @Published private(set) var codexAttentionStatus: String?
+
+    func connectCodexAttention() {
+        if AgentDeputyAppIdentity.bundleIdentifier.hasSuffix(".dev"),
+           ProcessInfo.processInfo.environment["CODEX_HOME"] == nil {
+            codexAttentionStatus = "开发包不会修改日常 Codex 配置；请在正式版连接"
+            return
+        }
+        do {
+            try CodexAttentionHookMonitor.installHooks()
+            codexAttentionStatus = "监听配置已写入；请在 Codex 的 /hooks 中信任新 Hook"
+        } catch {
+            codexAttentionStatus = "连接失败：\(error.localizedDescription)"
+        }
+    }
+
+    func respondToCodexPermission(
+        _ event: CodexAttentionEvent,
+        decision: CodexPermissionDecision
+    ) -> Bool {
+        do {
+            try codexAttentionMonitor.respond(to: event, with: decision)
+            return true
+        } catch {
+            codexAttentionStatus = "授权操作未送达 Codex：\(error.localizedDescription)"
+            return false
+        }
+    }
 
     func connectClaude() {
         do {
@@ -93,6 +122,7 @@ final class CodexTaskStore: ObservableObject {
     }
 
     var onTaskCompleted: ((CodexTask) -> Void)?
+    var onAttentionRequested: ((CodexTask, CodexAttentionEvent) -> Void)?
 
     private let appServerClient: CodexAppServerClient
     @Published private(set) var accountProfiles: [CodexAccountProfile] = []
@@ -479,6 +509,7 @@ final class CodexTaskStore: ObservableObject {
 
         isMonitoring = true
         refreshClaude()
+        pollCodexAttention()
 
         appServerClient.start()
         refreshTasks()
@@ -490,6 +521,7 @@ final class CodexTaskStore: ObservableObject {
             Task { @MainActor [weak self] in
                 self?.readActivity()
                 self?.refreshClaude()
+                self?.pollCodexAttention()
             }
         }
         RunLoop.main.add(activeStateTimer, forMode: .common)
@@ -542,6 +574,24 @@ final class CodexTaskStore: ObservableObject {
         refreshClaude(forceStatusRefresh: true)
         refreshTasks(forceFullHistory: true)
         readActivity()
+        pollCodexAttention()
+    }
+
+    private func pollCodexAttention() {
+        for event in codexAttentionMonitor.poll() {
+            let task = knownTasksByID[event.sessionID] ?? CodexTask(
+                id: event.sessionID,
+                title: "Codex 任务",
+                summary: "",
+                updatedAt: event.timestamp,
+                path: nil,
+                isRunning: true
+            )
+            onAttentionRequested?(task, event)
+        }
+        if let error = codexAttentionMonitor.error {
+            codexAttentionStatus = error
+        }
     }
 
     private func refreshFromActivityNotification() {
@@ -877,6 +927,18 @@ final class CodexTaskStore: ObservableObject {
         for (id, date) in snapshot.endedAt { knownTasksByID[id]?.endedAt = date }
         for completion in snapshot.completedTasks {
             pendingCompletionEvents[completion.id] = completion
+        }
+
+        for event in snapshot.attentionEvents {
+            let task = knownTasksByID[event.sessionID] ?? CodexTask(
+                id: event.sessionID,
+                title: "Codex 任务",
+                summary: "",
+                updatedAt: event.timestamp,
+                path: nil,
+                isRunning: true
+            )
+            onAttentionRequested?(task, event)
         }
 
         reconcileTasks()

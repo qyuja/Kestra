@@ -105,6 +105,160 @@ final class CodexSessionReaderTests: XCTestCase {
         XCTAssertTrue(snapshot.completedTasks.isEmpty)
     }
 
+    func testSetupOnlySessionHasKnownIdleStateAcrossChunksAndLaterSettings() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let record = makeRecord(fixture.path)
+        try appendJSON(["type": "session_meta", "payload": ["id": record.id]], to: fixture.path)
+        try appendJSON([
+            "type": "event_msg",
+            "payload": ["type": "thread_settings_applied", "settings": String(repeating: "x", count: 70_000)]
+        ], to: fixture.path)
+        let reader = CodexSessionActivityReader()
+
+        let initial = await reader.snapshot(records: [record])
+        XCTAssertTrue(initial.unknownThreadIDs.isEmpty, "A never-started session must not block account switching")
+        XCTAssertTrue(initial.activeThreadIDs.isEmpty)
+        XCTAssertTrue(initial.completedTasks.isEmpty)
+
+        try appendJSON(["type": "event_msg", "payload": ["type": "thread_settings_applied"]], to: fixture.path)
+        let updated = await reader.snapshot(records: [record])
+        XCTAssertTrue(updated.unknownThreadIDs.isEmpty)
+        XCTAssertTrue(updated.activeThreadIDs.isEmpty)
+    }
+
+    func testSetupOnlySessionStopsBeingIdleWhenTaskContentArrives() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let record = makeRecord(fixture.path)
+        try appendJSON(["type": "session_meta", "payload": ["id": record.id]], to: fixture.path)
+        let reader = CodexSessionActivityReader()
+        let idle = await reader.snapshot(records: [record])
+        XCTAssertTrue(idle.unknownThreadIDs.isEmpty)
+
+        try appendJSON(["type": "event_msg", "payload": ["type": "user_message", "message": "Start work"]], to: fixture.path)
+        let unconfirmed = await reader.snapshot(records: [record])
+        XCTAssertEqual(unconfirmed.unknownThreadIDs, [record.id])
+
+        try appendJSON(["type": "event_msg", "payload": ["type": "task_started", "turn_id": "new-turn"]], to: fixture.path)
+        let running = await reader.snapshot(records: [record])
+        XCTAssertEqual(running.activeThreadIDs, [record.id])
+        XCTAssertTrue(running.unknownThreadIDs.isEmpty)
+
+        try appendJSON(["type": "event_msg", "payload": ["type": "task_complete", "turn_id": "new-turn"]], to: fixture.path)
+        let completed = await reader.snapshot(records: [record])
+        XCTAssertTrue(completed.activeThreadIDs.isEmpty)
+        XCTAssertTrue(completed.unknownThreadIDs.isEmpty)
+        XCTAssertEqual(completed.completedTasks, [CodexTaskCompletionEvent(threadID: record.id, turnID: "new-turn")])
+    }
+
+    func testSetupOnlySessionIsUnknownWhileAnAppendedRecordIsIncomplete() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let record = makeRecord(fixture.path)
+        try appendJSON(["type": "session_meta", "payload": ["id": record.id]], to: fixture.path)
+        let reader = CodexSessionActivityReader()
+        let idle = await reader.snapshot(records: [record])
+        XCTAssertTrue(idle.unknownThreadIDs.isEmpty)
+
+        let handle = try FileHandle(forWritingTo: fixture.path)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("{\"type\":\"event_msg\",\"payload\":{\"type\":\"thread_settings_applied\"}".utf8))
+        let incomplete = await reader.snapshot(records: [record])
+        XCTAssertEqual(incomplete.unknownThreadIDs, [record.id])
+        let initialIncomplete = await CodexSessionActivityReader().snapshot(records: [record])
+        XCTAssertEqual(initialIncomplete.unknownThreadIDs, [record.id])
+
+        try handle.write(contentsOf: Data("}\n".utf8))
+        let complete = await reader.snapshot(records: [record])
+        XCTAssertTrue(complete.unknownThreadIDs.isEmpty)
+    }
+
+    func testNonSetupOrMalformedRecordsWithoutLifecycleRemainUnknown() async throws {
+        let recordsWithoutLifecycle = [
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"user_message\"}}\n",
+            "{\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\"}}\n",
+            "{\"type\":\"turn_context\",\"payload\":{}}\n",
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_complete\"}}\n",
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"future_event\"}}\n",
+            "not-json\n"
+        ]
+        for content in recordsWithoutLifecycle {
+            let fixture = try makeFixture()
+            defer { try? FileManager.default.removeItem(at: fixture.directory) }
+            let record = makeRecord(fixture.path)
+            try appendJSON(["type": "session_meta", "payload": ["id": record.id]], to: fixture.path)
+            let reader = CodexSessionActivityReader()
+            _ = await reader.snapshot(records: [record])
+            let handle = try FileHandle(forWritingTo: fixture.path)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data(content.utf8))
+            try handle.close()
+
+            let updated = await reader.snapshot(records: [record])
+            XCTAssertEqual(updated.unknownThreadIDs, [record.id], content)
+            let initial = await CodexSessionActivityReader().snapshot(records: [record])
+            XCTAssertEqual(initial.unknownThreadIDs, [record.id], content)
+        }
+    }
+
+    func testActivityReaderEmitsInteractiveQuestionsFromProtocolItems() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        let record = makeRecord(fixture.path)
+        let reader = CodexSessionActivityReader()
+        _ = await reader.snapshot(records: [record])
+
+        try appendJSON([
+            "type": "event_msg",
+            "payload": ["type": "task_started", "turn_id": "turn-42"]
+        ], to: fixture.path)
+        _ = await reader.snapshot(records: [record])
+
+        try appendJSON([
+            "type": "response_item",
+            "payload": [
+                "type": "function_call",
+                "name": "request_user_input",
+                "call_id": "call-1",
+                "arguments": "private question"
+            ]
+        ], to: fixture.path)
+        try appendJSON([
+            "type": "response_item",
+            "payload": [
+                "type": "function_call",
+                "name": "request_user_input_async",
+                "call_id": "call-2"
+            ]
+        ], to: fixture.path)
+        try appendJSON([
+            "type": "response_item",
+            "payload": ["type": "function_call_output", "call_id": "call-1"]
+        ], to: fixture.path)
+
+        let snapshot = await reader.snapshot(records: [record])
+        XCTAssertEqual(snapshot.attentionEvents.map(\.requestID), ["call-1", "call-2"])
+        XCTAssertTrue(snapshot.attentionEvents.allSatisfy { $0.kind == .userInput && $0.turnID == "turn-42" })
+        XCTAssertTrue(snapshot.activeThreadIDs.contains(record.id))
+        let nextSnapshot = await reader.snapshot(records: [record])
+        XCTAssertTrue(nextSnapshot.attentionEvents.isEmpty)
+    }
+
+    func testActivityReaderDoesNotReplayQuestionOnInitialScan() async throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+        try appendJSON(["type": "event_msg", "payload": ["type": "task_started", "turn_id": "old"]], to: fixture.path)
+        try appendJSON([
+            "type": "response_item",
+            "payload": ["type": "function_call", "name": "request_user_input", "call_id": "old-call"]
+        ], to: fixture.path)
+
+        let snapshot = await CodexSessionActivityReader().snapshot(records: [makeRecord(fixture.path)])
+        XCTAssertTrue(snapshot.attentionEvents.isEmpty)
+    }
+
     func testLifecycleTimingRestoresStartAndUsesCompletionTimestamp() async throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directory) }

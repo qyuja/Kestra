@@ -23,7 +23,7 @@ enum AIProvider: String, CaseIterable, Codable, Identifiable {
         case .claude: "claude"
         }
     }
-    var tint: Color { self == .claude ? .orange : .green }
+    var tint: Color { self == .claude ? .orange : AgentDeputyPalette.accent }
     var frontmostApplicationBundleIdentifiers: Set<String> {
         self == .codex ? ["com.openai.codex", "com.openai.chatgpt", "com.openai.chat"] : []
     }

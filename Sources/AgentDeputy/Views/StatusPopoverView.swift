@@ -3,10 +3,10 @@ import AppKit
 import SwiftUI
 
 enum StatusPopoverStyle {
-    static let selectionColor = Color(nsColor: .systemGreen)
+    static let selectionColor = AgentDeputyPalette.accent
     static let surface = Color(nsColor: .windowBackgroundColor)
     static let tile = Color(nsColor: .controlBackgroundColor)
-    static let selectedTile = Color(nsColor: .systemGreen).opacity(0.14)
+    static let selectedTile = AgentDeputyPalette.selectedFill
     static let divider = Color(nsColor: .separatorColor)
     static let primaryText = Color.primary.opacity(0.88)
     static let secondaryText = Color.secondary.opacity(0.82)
@@ -293,7 +293,7 @@ struct StatusPopoverView: View {
                     taskGroupTitle(
                         "正在运行",
                         count: runningTasks.count,
-                        tint: .green,
+                        tint: StatusPopoverStyle.selectionColor,
                         isExpanded: $isRunningSectionExpanded
                     )
                     if isRunningSectionExpanded {
@@ -367,7 +367,7 @@ struct StatusPopoverView: View {
         VStack(spacing: layoutMode.spacing(10)) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(.green.opacity(0.8))
+                .foregroundStyle(StatusPopoverStyle.selectionColor.opacity(0.8))
             Text(activeProvider == .claude ? store.claudeStatus : "当前没任务")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.primary.opacity(0.52))
@@ -381,9 +381,6 @@ struct StatusPopoverView: View {
 
     private var taskFooter: some View {
         HStack(spacing: layoutMode.spacing(10)) {
-            Text("深蹲 \(squatRunner.total) 次")
-                .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
-                .help("累计播放的完整深蹲次数；中途停止不计数，重启后保留")
             Button(action: store.refreshNow) {
                 Label("刷新", systemImage: "arrow.clockwise")
             }
@@ -412,6 +409,7 @@ struct StatusPopoverView: View {
                 )
 
                 taskPreviewRow
+                codexAttentionSection
                 displayPositionSection
                 completionAnimationSection
                 timingSection
@@ -462,6 +460,37 @@ struct StatusPopoverView: View {
         .padding(.horizontal, layoutMode.spacing(9))
         .frame(minHeight: 28)
         .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var codexAttentionSection: some View {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(5)) {
+            HStack(spacing: layoutMode.spacing(8)) {
+                Image(systemName: "questionmark.bubble")
+                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+                Text("Codex 交互提醒")
+                    .foregroundStyle(StatusPopoverStyle.primaryText)
+                Spacer(minLength: 4)
+                if CodexAttentionHookMonitor.isConfigured() {
+                    Text("已配置")
+                        .foregroundStyle(StatusPopoverStyle.selectionColor)
+                } else {
+                    Button("连接", action: store.connectCodexAttention)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(StatusPopoverStyle.selectionColor)
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .help("连接后需在 Codex 的 /hooks 中信任新 Hook")
+
+            if let status = store.codexAttentionStatus {
+                Text(status)
+                    .font(.system(size: 10))
+                    .foregroundStyle(StatusPopoverStyle.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(layoutMode.spacing(10))
+        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var themeSection: some View {
@@ -1242,8 +1271,8 @@ private final class RunningTaskIndicatorView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.systemGreen.cgColor
         layer?.cornerRadius = 3.5
+        updateTint()
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         setAccessibilityLabel("运行中")
@@ -1258,7 +1287,13 @@ private final class RunningTaskIndicatorView: NSView {
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        updateTint()
         updatePulseAnimation()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateTint()
     }
 
     deinit {
@@ -1267,6 +1302,10 @@ private final class RunningTaskIndicatorView: NSView {
 
     @objc private func accessibilityDisplayOptionsDidChange() {
         updatePulseAnimation()
+    }
+
+    private func updateTint() {
+        layer?.backgroundColor = AgentDeputyPalette.nsColor(for: effectiveAppearance).cgColor
     }
 
     private func updatePulseAnimation() {

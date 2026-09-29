@@ -7,6 +7,12 @@
 
 ## Compact log
 
+- 2026-09-28: Isolated Dev synthetic permission tests clicked Deny, Allow Once, and Open Codex: Hook returned deny, allow, and no decision respectively; all 11 focused tests passed. Two rapid follow-up requests unexpectedly returned allow amid desktop-automation/UI interference, while a no-click request stayed pending for five seconds; cause remains unverified. Real Codex approval E2E remains unverified. Do not touch installed apps or daily Hook configuration.
+
+- 2026-09-28: Add Codex interactive-attention monitoring without subscribing to another app-server connection: detect new `request_user_input` calls from session JSONL and use an opt-in `PermissionRequest` Hook for approvals. Persist only event metadata, never auto-answer or approve, avoid replaying old events, and keep Hook installation out of the isolated Dev bundle unless `CODEX_HOME` is explicitly set. Tests and Dev build are not real Codex Hook/trust E2E verification.
+
+- 2026-09-28: Remove the built-in squat and sparkles menu bar icon options and the squat count UI. Migrate saved selections to AgentDeputy Logo, preserve custom frame plugins, and validate only with the isolated Dev build; do not touch installed apps.
+
 - 2026-09-28: Continue the AgentDeputy menubar logo motion: change only the outer stroke's visible travel to clockwise, retain the original idle SVG, inner artwork, and 2.4-second lap. Verify the rendered path and use the isolated Dev app; leave installed apps untouched.
 
 - 2026-09-28: Rename Kestra source/test modules, app bundle and local project directory to AgentDeputy. Preserve the published GitHub repository URL until it exists under the new name; copy old app state into the new bundle namespace without removing installed or persisted old-state data. Claude Code Hook paths require a manual reconnect after rename.

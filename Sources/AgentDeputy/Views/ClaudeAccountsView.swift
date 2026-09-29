@@ -35,7 +35,7 @@ struct ClaudeAccountsView: View {
                                 Text(profile.identity.subscriptionType ?? "Claude 订阅").font(.caption2).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            if accounts.currentID == profile.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
+                            if accounts.currentID == profile.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(AgentDeputyPalette.accent) }
                         }.contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

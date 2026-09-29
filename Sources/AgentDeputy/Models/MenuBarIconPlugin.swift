@@ -14,7 +14,6 @@ struct MenuBarIconPlugin {
     let systemSymbolName: String?
     let idleFrame: Int
     let cycleDuration: Double
-    let countsTowardSquat: Bool
 
     var isAnimated: Bool {
         frames.count > 1
@@ -50,6 +49,7 @@ enum MenuBarIconPluginCatalog {
     static let agentDeputyLogoID = "agentdeputy-logo"
     static let previousLogoID = "kestra-logo"
     static let sparklesID = "sparkles"
+    static let retiredIDs: Set<String> = [squatID, sparklesID]
 
     static func builtIns() -> (plugins: [MenuBarIconPlugin], errors: [String]) {
         var plugins: [MenuBarIconPlugin] = []
@@ -65,32 +65,9 @@ enum MenuBarIconPluginCatalog {
                 frames: [],
                 systemSymbolName: "circle",
                 idleFrame: 0,
-                cycleDuration: 1.2,
-                countsTowardSquat: false
+                cycleDuration: 1.2
             )
         )
-
-        let squatFrames = (0..<8).compactMap { frame in
-            AgentDeputyResourceBundle.bundle.url(
-                forResource: "barbell-squat-frame-\(frame)",
-                withExtension: "png"
-            ).flatMap(NSImage.init(contentsOf:))
-        }
-
-        if squatFrames.count == 8 {
-            plugins.append(
-                MenuBarIconPlugin(
-                    option: MenuBarIconOption(id: squatID, name: "深蹲"),
-                    frames: squatFrames,
-                    systemSymbolName: nil,
-                    idleFrame: 0,
-                    cycleDuration: 1.2,
-                    countsTowardSquat: true
-                )
-            )
-        } else {
-            errors.append("内置深蹲图标资源不完整")
-        }
 
         if let logoURL = AgentDeputyResourceBundle.bundle.url(
             forResource: "agentdeputy-logo-icon",
@@ -102,27 +79,11 @@ enum MenuBarIconPluginCatalog {
                     frames: [logoImage],
                     systemSymbolName: nil,
                     idleFrame: 0,
-                    cycleDuration: 1.2,
-                    countsTowardSquat: false
+                    cycleDuration: 1.2
                 )
             )
         } else {
             errors.append("内置 AgentDeputy Logo 资源不可用")
-        }
-
-        if NSImage(systemSymbolName: "sparkles", accessibilityDescription: "星芒") != nil {
-            plugins.append(
-                MenuBarIconPlugin(
-                    option: MenuBarIconOption(id: sparklesID, name: "星芒"),
-                    frames: [],
-                    systemSymbolName: "sparkles",
-                    idleFrame: 0,
-                    cycleDuration: 1.2,
-                    countsTowardSquat: false
-                )
-            )
-        } else {
-            errors.append("内置星芒系统图标不可用")
         }
 
         return (plugins, errors)
@@ -165,7 +126,7 @@ enum MenuBarIconPluginLoader {
 
         var plugins = builtIns
         var errors: [String] = []
-        var usedIDs = Set(builtIns.map { $0.option.id })
+        var usedIDs = Set(builtIns.map { $0.option.id }).union(MenuBarIconPluginCatalog.retiredIDs)
 
         let children: [URL]
         do {
@@ -284,8 +245,7 @@ enum MenuBarIconPluginLoader {
                         frames: loadedFrames,
                         systemSymbolName: nil,
                         idleFrame: idleFrame,
-                        cycleDuration: cycleDuration,
-                        countsTowardSquat: false
+                        cycleDuration: cycleDuration
                     )
                 } else if let systemSymbol = manifest.systemSymbol {
                     let symbolName = try validatedSystemSymbol(systemSymbol)
@@ -301,8 +261,7 @@ enum MenuBarIconPluginLoader {
                         frames: [],
                         systemSymbolName: symbolName,
                         idleFrame: 0,
-                        cycleDuration: cycleDuration,
-                        countsTowardSquat: false
+                        cycleDuration: cycleDuration
                     )
                 } else {
                     throw ValidationError(message: "插件没有可用资源")

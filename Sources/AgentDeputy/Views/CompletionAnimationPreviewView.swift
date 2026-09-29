@@ -25,12 +25,12 @@ struct CompletionAnimationPreviewView: View {
         HStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(Color.green.opacity(0.18))
+                    .fill(AgentDeputyPalette.accent.opacity(0.18))
                     .frame(width: 32, height: 32)
 
                 Image(systemName: "checkmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AgentDeputyPalette.accent)
             }
 
             Text("Codex 已完成")

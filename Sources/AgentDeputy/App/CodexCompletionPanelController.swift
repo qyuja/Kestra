@@ -4,16 +4,28 @@ import SwiftUI
 
 @MainActor
 final class CodexCompletionPanelController: NSObject {
+    private struct Notice {
+        let task: CodexTask
+        let attention: CodexAttentionEvent?
+    }
+
     private let onOpenTask: (CodexTask) -> Void
+    private let onPermissionDecision: (CodexAttentionEvent, CodexPermissionDecision) -> Bool
     private let animationRegistry: CompletionAnimationRegistry
     private let animationSettings: CompletionAnimationSettingsStore
     private let themeStore: AgentDeputyThemeStore
-    private let panelSize = NSSize(width: 368, height: 86)
+    private var panelSize: NSSize {
+        currentAttention?.permission == nil
+            ? NSSize(width: 368, height: 86)
+            : NSSize(width: 432, height: 248)
+    }
 
     private var panel: NSPanel?
-    private var pendingTasks: [CodexTask] = []
+    private var pendingTasks: [Notice] = []
     private var currentTask: CodexTask?
+    private var currentAttention: CodexAttentionEvent?
     private var dismissTask: Task<Void, Never>?
+    private var permissionExpiryTask: Task<Void, Never>?
     private var isHovering = false
     private var isDismissing = false
     private var activeTransition: CompletionAnimationTransition?
@@ -37,9 +49,11 @@ final class CodexCompletionPanelController: NSObject {
     func cancelPreview() {
         generation = UUID()
         dismissTask?.cancel()
+        permissionExpiryTask?.cancel()
         panel?.orderOut(nil)
         panel = nil
         currentTask = nil
+        currentAttention = nil
         pendingTasks.removeAll()
         isDismissing = false
         isHovering = false
@@ -51,11 +65,13 @@ final class CodexCompletionPanelController: NSObject {
 
     init(
         onOpenTask: @escaping (CodexTask) -> Void,
+        onPermissionDecision: @escaping (CodexAttentionEvent, CodexPermissionDecision) -> Bool,
         animationRegistry: CompletionAnimationRegistry,
         animationSettings: CompletionAnimationSettingsStore,
         themeStore: AgentDeputyThemeStore
     ) {
         self.onOpenTask = onOpenTask
+        self.onPermissionDecision = onPermissionDecision
         self.animationRegistry = animationRegistry
         self.animationSettings = animationSettings
         self.themeStore = themeStore
@@ -69,7 +85,20 @@ final class CodexCompletionPanelController: NSObject {
     }
 
     func enqueue(_ task: CodexTask) {
-        pendingTasks.append(task)
+        pendingTasks.append(Notice(task: task, attention: nil))
+        showNextIfNeeded()
+    }
+
+    func enqueueAttention(_ task: CodexTask, event: CodexAttentionEvent) {
+        let notice = Notice(task: task, attention: event)
+        if event.permission != nil {
+            pendingTasks.insert(notice, at: 0)
+            if currentAttention?.permission == nil, currentTask != nil {
+                dismissCurrent(animated: false)
+            }
+        } else {
+            pendingTasks.append(notice)
+        }
         showNextIfNeeded()
     }
 
@@ -79,18 +108,20 @@ final class CodexCompletionPanelController: NSObject {
     }
 
     private func showNextIfNeeded() {
-        guard currentTask == nil, !isDismissing, let task = pendingTasks.first else {
+        pendingTasks.removeAll { $0.attention?.permission.map { $0.expiresAt <= .now } ?? false }
+        guard currentTask == nil, !isDismissing, let notice = pendingTasks.first else {
             return
         }
 
         pendingTasks.removeFirst()
 
-        if shouldSuppressCompletion(for: task) {
+        if notice.attention == nil && shouldSuppressCompletion(for: notice.task) {
             showNextIfNeeded()
             return
         }
 
-        currentTask = task
+        currentTask = notice.task
+        currentAttention = notice.attention
         let panel = makePanelIfNeeded()
         let configuration = animationSettings.configuration
         let animation = selectedAnimation
@@ -112,7 +143,8 @@ final class CodexCompletionPanelController: NSObject {
 
         panel.contentViewController = NSHostingController(
             rootView: CodexCompletionView(
-                task: task,
+                task: notice.task,
+                attention: notice.attention,
                 animationPlugin: animation,
                 animationConfiguration: configuration,
                 themeStore: themeStore,
@@ -121,12 +153,24 @@ final class CodexCompletionPanelController: NSObject {
                 },
                 onOpen: { [weak self] in
                     self?.openCurrentTask()
+                },
+                onDecision: { [weak self] decision in
+                    self?.resolvePermission(decision)
                 }
             )
         )
         panel.setFrame(initialFrame, display: false)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+
+        if let request = notice.attention?.permission {
+            // Approval is time-sensitive; an off-screen entrance must never
+            // make the only actionable UI invisible while Codex is waiting.
+            panel.setFrame(finalFrame, display: true)
+            panel.alphaValue = 1
+            schedulePermissionExpiry(for: request)
+            return
+        }
 
         if isExitPreview {
             panel.setFrame(finalFrame, display: true)
@@ -143,6 +187,16 @@ final class CodexCompletionPanelController: NSObject {
         }
 
         scheduleDismiss()
+    }
+
+    private func schedulePermissionExpiry(for request: CodexPermissionRequest) {
+        permissionExpiryTask?.cancel()
+        permissionExpiryTask = Task { @MainActor [weak self] in
+            let remaining = max(0, request.expiresAt.addingTimeInterval(-1).timeIntervalSinceNow)
+            try? await Task.sleep(for: .seconds(remaining))
+            guard !Task.isCancelled, self?.currentAttention?.permission?.id == request.id else { return }
+            self?.dismissCurrent(animated: false)
+        }
     }
 
     private func shouldSuppressCompletion(for task: CodexTask) -> Bool {
@@ -253,6 +307,7 @@ final class CodexCompletionPanelController: NSObject {
 
     private func setHovering(_ hovering: Bool) {
         isHovering = hovering
+        guard currentAttention?.permission == nil else { return }
         if hovering {
             dismissTask?.cancel()
         } else {
@@ -269,6 +324,7 @@ final class CodexCompletionPanelController: NSObject {
 
     private func scheduleDismiss() {
         dismissTask?.cancel()
+        guard currentAttention?.permission == nil else { return }
         guard !isHovering, !isDismissing else { return }
 
         let dwellDuration: Double
@@ -284,13 +340,27 @@ final class CodexCompletionPanelController: NSObject {
 
     private func openCurrentTask() {
         guard let task = currentTask else { return }
+        if let attention = currentAttention, attention.permission != nil {
+            _ = onPermissionDecision(attention, .openInCodex)
+        }
         dismissCurrent(animated: false)
         onOpenTask(task)
+    }
+
+    private func resolvePermission(_ decision: CodexPermissionDecision) {
+        guard let attention = currentAttention, attention.permission != nil else { return }
+        guard onPermissionDecision(attention, decision) else {
+            NSSound.beep()
+            return
+        }
+        dismissCurrent(animated: false)
     }
 
     private func dismissCurrent(animated: Bool = true) {
         dismissTask?.cancel()
         dismissTask = nil
+        permissionExpiryTask?.cancel()
+        permissionExpiryTask = nil
         isHovering = false
 
         guard currentTask != nil, !isDismissing else { return }
@@ -358,8 +428,8 @@ final class CodexCompletionPanelController: NSObject {
         // Roughly 3-point grains share one snapshot instead of allocating an image per grain.
         let columns = 123
         let rows = 29
-        let width = panelSize.width / CGFloat(columns)
-        let height = panelSize.height / CGFloat(rows)
+        let width = source.frame.width / CGFloat(columns)
+        let height = source.frame.height / CGFloat(rows)
         let token = generation
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self, overlay] in
@@ -410,6 +480,7 @@ final class CodexCompletionPanelController: NSObject {
     private func finishDismissal() {
         isDismissing = false
         currentTask = nil
+        currentAttention = nil
         activeTransition = nil
 
         guard !pendingTasks.isEmpty else { return }
@@ -421,22 +492,30 @@ final class CodexCompletionPanelController: NSObject {
 
 private struct CodexCompletionView: View {
     let task: CodexTask
+    let attention: CodexAttentionEvent?
     let animationPlugin: any CompletionAnimationPlugin
     let animationConfiguration: CompletionAnimationConfiguration
     @ObservedObject var themeStore: AgentDeputyThemeStore
     let onHover: (Bool) -> Void
     let onOpen: () -> Void
+    let onDecision: (CodexPermissionDecision) -> Void
 
     var body: some View {
-        animationPlugin.makeView(
-            content: AnyView(
-                Button(action: onOpen) {
-                    cardContent
-                }
-                .buttonStyle(.plain)
-            ),
-            configuration: animationConfiguration
-        )
+        Group {
+            if let request = attention?.permission {
+                permissionCard(request)
+            } else {
+                animationPlugin.makeView(
+                    content: AnyView(
+                        Button(action: onOpen) {
+                            cardContent
+                        }
+                        .buttonStyle(.plain)
+                    ),
+                    configuration: animationConfiguration
+                )
+            }
+        }
         .onHover(perform: onHover)
         .preferredColorScheme(preferredColorScheme)
     }
@@ -453,17 +532,17 @@ private struct CodexCompletionView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.green.opacity(0.18))
+                    .fill(AgentDeputyPalette.accent.opacity(0.18))
                     .frame(width: 38, height: 38)
 
-                Image(systemName: "checkmark")
+                Image(systemName: attention?.kind.symbolName ?? "checkmark")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(AgentDeputyPalette.accent)
             }
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text("\(task.provider.name) 已完成")
+                    Text(attention.map { "\(task.provider.name) \($0.kind.title)" } ?? "\(task.provider.name) 已完成")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.primary.opacity(0.64))
 
@@ -481,7 +560,7 @@ private struct CodexCompletionView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
 
-                Text(task.summary)
+                Text(attention == nil ? task.summary : "点击打开 Codex 回答")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(.primary.opacity(0.44))
                     .lineLimit(1)
@@ -495,5 +574,71 @@ private struct CodexCompletionView: View {
         }
         .padding(.horizontal, 14)
         .frame(width: 368, height: 86)
+    }
+
+    private func permissionCard(_ request: CodexPermissionRequest) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 10) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AgentDeputyPalette.accent)
+                    .frame(width: 34, height: 34)
+                    .background(AgentDeputyPalette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 10))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(task.provider.name) 需要授权")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(task.title)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Text(request.toolName)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            if let reason = request.reason, !reason.isEmpty {
+                Text(reason)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.primary.opacity(0.75))
+                    .lineLimit(2)
+            }
+
+            ScrollView {
+                Text(request.input)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(request.canApprove ? .primary : .secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            .frame(height: request.reason == nil ? 105 : 79)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+
+            HStack(spacing: 8) {
+                Text("未操作则由 Codex 接管")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 2)
+                Button("拒绝") { onDecision(.deny) }
+                    .foregroundStyle(.red)
+                Button("打开 Codex", action: onOpen)
+                Button("同意一次") { onDecision(.allow) }
+                    .disabled(!request.canApprove)
+                    .accessibilityHint("只批准当前这一次请求")
+            }
+            .font(.system(size: 11, weight: .medium))
+            .buttonStyle(.bordered)
+        }
+        .padding(14)
+        .frame(width: 432, height: 248, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: animationConfiguration.cardCornerRadius, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+        )
+        .clipShape(RoundedRectangle(cornerRadius: animationConfiguration.cardCornerRadius, style: .continuous))
     }
 }

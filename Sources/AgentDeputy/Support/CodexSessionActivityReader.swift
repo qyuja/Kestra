@@ -12,6 +12,7 @@ struct CodexTaskCompletionEvent: Hashable, Sendable {
 struct CodexActivitySnapshot: Sendable {
     let activeThreadIDs: Set<String>
     let completedTasks: [CodexTaskCompletionEvent]
+    var attentionEvents: [CodexAttentionEvent] = []
     var startedAt: [String: Date] = [:]
     var endedAt: [String: Date] = [:]
     var unknownThreadIDs: Set<String> = []
@@ -27,14 +28,22 @@ actor CodexSessionActivityReader {
         var offset: UInt64 = 0
         var pendingLine = Data()
         var isRunning = false
+        var currentTurnID: String?
         var startedAt: Date?
         var endedAt: Date?
         var hasLifecycle = false
         var isReliable = true
+        var hasSessionMetadata = false
+        var hasOnlySetupRecords = true
+
+        var hasKnownActivity: Bool {
+            isReliable && pendingLine.isEmpty
+                && (hasLifecycle || (hasSessionMetadata && hasOnlySetupRecords))
+        }
     }
 
     private enum LifecycleEvent {
-        case started(Date?)
+        case started(turnID: String?, date: Date?)
         case completed(turnID: String, date: Date?)
         case aborted(Date?)
     }
@@ -48,6 +57,10 @@ actor CodexSessionActivityReader {
         Data("\"task_cancelled\"".utf8),
         Data("\"turn_cancelled\"".utf8)
     ]
+    private static let userInputMarkers = [
+        Data("\"request_user_input\"".utf8),
+        Data("\"request_user_input_async\"".utf8)
+    ]
     private static let reversedLifecyclePrefixes = [
         Data(Array("\"task_".utf8.reversed())),
         Data(Array("\"turn_".utf8.reversed()))
@@ -58,6 +71,7 @@ actor CodexSessionActivityReader {
     func snapshot(records: [CodexThreadRecord]) -> CodexActivitySnapshot {
         var activeThreadIDs = Set<String>()
         var completedTasks: [CodexTaskCompletionEvent] = []
+        var attentionEvents: [CodexAttentionEvent] = []
         var seenPaths = Set<String>()
         var startedAt: [String: Date] = [:]
         var endedAt: [String: Date] = [:]
@@ -68,7 +82,7 @@ actor CodexSessionActivityReader {
             let pathKey = path.path
             let isNewFile = states[pathKey] == nil
             let shouldEmitCompletions = hasBootstrapped && !isNewFile
-            let events: (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent])
+            let events: (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent], attentionEvents: [CodexAttentionEvent])
             if isNewFile {
                 events = readInitialState(at: path)
             } else {
@@ -80,13 +94,14 @@ actor CodexSessionActivityReader {
             }
 
             seenPaths.insert(pathKey)
-            if states[pathKey]?.hasLifecycle != true || states[pathKey]?.isReliable != true {
+            if states[pathKey]?.hasKnownActivity != true {
                 unknownThreadIDs.insert(record.id)
             }
             if events.isRunning {
                 activeThreadIDs.insert(record.id)
             }
             completedTasks.append(contentsOf: events.completedTasks)
+            attentionEvents.append(contentsOf: events.attentionEvents)
             startedAt[record.id] = states[pathKey]?.startedAt
             endedAt[record.id] = states[pathKey]?.endedAt
         }
@@ -97,6 +112,7 @@ actor CodexSessionActivityReader {
         return CodexActivitySnapshot(
             activeThreadIDs: activeThreadIDs,
             completedTasks: completedTasks,
+            attentionEvents: attentionEvents,
             startedAt: startedAt,
             endedAt: endedAt,
             unknownThreadIDs: unknownThreadIDs
@@ -107,15 +123,16 @@ actor CodexSessionActivityReader {
         at path: URL,
         threadID: String,
         emitCompletions: Bool
-    ) -> (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent]) {
+    ) -> (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent], attentionEvents: [CodexAttentionEvent]) {
         let pathKey = path.path
         var state = states[pathKey] ?? SessionState()
         var completedTasks: [CodexTaskCompletionEvent] = []
+        var attentionEvents: [CodexAttentionEvent] = []
 
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: path.path),
               let fileSize = attributes[.size] as? NSNumber else {
             states[pathKey] = state
-            return (state.isRunning, completedTasks)
+            return (state.isRunning, completedTasks, attentionEvents)
         }
 
         let currentSize = fileSize.uint64Value
@@ -126,7 +143,7 @@ actor CodexSessionActivityReader {
         guard currentSize > state.offset,
               let handle = try? FileHandle(forReadingFrom: path) else {
             states[pathKey] = state
-            return (state.isRunning, completedTasks)
+            return (state.isRunning, completedTasks, attentionEvents)
         }
 
         defer {
@@ -144,40 +161,37 @@ actor CodexSessionActivityReader {
                     let line = state.pendingLine.subdata(in: 0..<newlineIndex)
                     state.pendingLine.removeSubrange(0...newlineIndex)
 
-                    guard let event = lifecycleEvent(from: line) else { continue }
-                    switch event {
-                    case .started:
-                        state.isRunning = true
-                    case .completed(let turnID, _):
-                        if emitCompletions, state.isRunning {
-                            completedTasks.append(
-                                CodexTaskCompletionEvent(
-                                    threadID: threadID,
-                                    turnID: turnID
-                                )
-                            )
+                    if let event = lifecycleEvent(from: line) {
+                        if case .completed(let turnID, _) = event, emitCompletions, state.isRunning {
+                            completedTasks.append(CodexTaskCompletionEvent(threadID: threadID, turnID: turnID))
                         }
-                        state.isRunning = false
-                    case .aborted:
-                        state.isRunning = false
+                        apply(event, to: &state)
+                    } else {
+                        inspectSetupRecord(from: line, to: &state)
                     }
-                    apply(event, to: &state)
+                    if let attention = userInputEvent(
+                        from: line,
+                        threadID: threadID,
+                        turnID: state.currentTurnID
+                    ) {
+                        attentionEvents.append(attention)
+                    }
                 }
             }
         } catch {
             // Keep the last coherent state. The next polling pass retries the
             // unread bytes from the same offset.
             states[pathKey] = state
-            return (state.isRunning, completedTasks)
+            return (state.isRunning, completedTasks, attentionEvents)
         }
 
         states[pathKey] = state
-        return (state.isRunning, completedTasks)
+        return (state.isRunning, completedTasks, attentionEvents)
     }
 
     private func readInitialState(
         at path: URL
-    ) -> (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent]) {
+    ) -> (isRunning: Bool, completedTasks: [CodexTaskCompletionEvent], attentionEvents: [CodexAttentionEvent]) {
         let pathKey = path.path
         var state = SessionState()
 
@@ -185,7 +199,7 @@ actor CodexSessionActivityReader {
               let fileSize = attributes[.size] as? NSNumber,
               let handle = try? FileHandle(forReadingFrom: path) else {
             states[pathKey] = state
-            return (state.isRunning, [])
+            return (state.isRunning, [], [])
         }
 
         let currentSize = fileSize.uint64Value
@@ -193,7 +207,7 @@ actor CodexSessionActivityReader {
         guard currentSize > 0 else {
             states[pathKey] = state
             try? handle.close()
-            return (state.isRunning, [])
+            return (state.isRunning, [], [])
         }
 
         defer {
@@ -222,7 +236,10 @@ actor CodexSessionActivityReader {
                         if let event = lifecycleEvent(fromReversedLine: reversedLine) {
                             apply(event, to: &state)
                             states[pathKey] = state
-                            return (state.isRunning, [])
+                            return (state.isRunning, [], [])
+                        }
+                        if state.hasOnlySetupRecords {
+                            inspectSetupRecord(from: Data(reversedLine.reversed()), to: &state)
                         }
                         reversedLine.removeAll(keepingCapacity: true)
                     } else {
@@ -237,24 +254,54 @@ actor CodexSessionActivityReader {
 
         if let event = lifecycleEvent(fromReversedLine: reversedLine) {
             apply(event, to: &state)
+        } else {
+            inspectSetupRecord(from: Data(reversedLine.reversed()), to: &state)
         }
 
         states[pathKey] = state
-        return (state.isRunning, [])
+        return (state.isRunning, [], [])
+    }
+
+    private func inspectSetupRecord(from line: Data, to state: inout SessionState) {
+        guard !state.hasLifecycle, state.hasOnlySetupRecords, !line.isEmpty else { return }
+        guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            state.hasOnlySetupRecords = false
+            return
+        }
+
+        // A created but never-started thread has no lifecycle events. Only
+        // positively identified setup records can establish that it is idle.
+        switch object["type"] as? String {
+        case "session_meta":
+            guard let payload = object["payload"] as? [String: Any],
+                  let id = payload["id"] as? String, !id.isEmpty else {
+                state.hasOnlySetupRecords = false
+                return
+            }
+            state.hasSessionMetadata = true
+        case "event_msg":
+            let payload = object["payload"] as? [String: Any]
+            state.hasOnlySetupRecords = payload?["type"] as? String == "thread_settings_applied"
+        default:
+            state.hasOnlySetupRecords = false
+        }
     }
 
     private func apply(_ event: LifecycleEvent, to state: inout SessionState) {
         state.hasLifecycle = true
         switch event {
-        case .started(let date):
+        case .started(let turnID, let date):
             state.isRunning = true
+            state.currentTurnID = turnID
             state.startedAt = date ?? .now
             state.endedAt = nil
         case .completed(_, let date):
             state.isRunning = false
+            state.currentTurnID = nil
             state.endedAt = date ?? .now
         case .aborted(let date):
             state.isRunning = false
+            state.currentTurnID = nil
             state.endedAt = date ?? .now
         }
     }
@@ -277,7 +324,7 @@ actor CodexSessionActivityReader {
         let date = formatter.date(from: timestamp) ?? ISO8601DateFormatter().date(from: timestamp)
         switch type {
         case "task_started":
-            return .started(date)
+            return .started(turnID: payload["turn_id"] as? String, date: date)
         case "task_complete":
             guard let turnID = payload["turn_id"] as? String, !turnID.isEmpty else {
                 return nil
@@ -288,6 +335,29 @@ actor CodexSessionActivityReader {
         default:
             return nil
         }
+    }
+
+    private func userInputEvent(
+        from line: Data,
+        threadID: String,
+        turnID: String?
+    ) -> CodexAttentionEvent? {
+        guard Self.userInputMarkers.contains(where: { line.range(of: $0) != nil }),
+              let turnID,
+              let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              object["type"] as? String == "response_item",
+              let payload = object["payload"] as? [String: Any],
+              payload["type"] as? String == "function_call",
+              let name = payload["name"] as? String,
+              name == "request_user_input" || name == "request_user_input_async",
+              let callID = payload["call_id"] as? String, !callID.isEmpty else { return nil }
+        return CodexAttentionEvent(
+            sessionID: threadID,
+            turnID: turnID,
+            requestID: callID,
+            kind: .userInput,
+            timestamp: .now
+        )
     }
 
     private func lifecycleEvent(fromReversedLine line: [UInt8]) -> LifecycleEvent? {

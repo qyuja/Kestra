@@ -49,7 +49,7 @@ struct AppBrandIcon: View {
                     .interpolation(.high)
                     .scaledToFit()
             } else {
-                Image(systemName: "sparkles")
+                Image(systemName: "terminal")
                     .font(.system(size: size, weight: weight))
                     .symbolRenderingMode(.hierarchical)
             }

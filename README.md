@@ -6,14 +6,15 @@ AgentDeputy 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务�
 
 ## 功能
 
-- 状态栏图标显示运行状态；可选择客户端状态、Barbell Squat runner 或 AgentDeputy Logo。
+- 状态栏图标显示运行状态；可选择客户端状态或 AgentDeputy Logo。
 - 任务 popover 中查看 Active / Recent 任务、thread name、最近一条 user 对话摘要、模型和 effort。
 - 支持客户端 tab、任务展开收起、运行时长和完成时间展示。
 - 任务完成后从屏幕指定位置弹出可点击的完成提醒，支持边、角和中心位置，以及独立的 In / Out 动画、速度和停留时长设置。
+- Codex 会话出现交互式问答时，根据本地会话协议记录弹出“需要回答”提醒，点击可打开对应对话；权限审批通过 `PermissionRequest` Hook 弹出请求详情，可选择“同意一次”“拒绝”或打开 Codex。AgentDeputy 不会自动回答或批准。
 - 账号管理和手动切换目前面向 Codex / ChatGPT 与 Claude Code；切换前会阻止仍有运行任务的账号操作。
 - Codex 额度按 30 秒在后台轮询；可选在检测到额度窗口重置后，发送一次“只打招呼、不执行操作”的临时问候来尽早刷新额度状态。
 - 设置中支持使用 macOS 原生登录项注册开机自启动。
-- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项包含深蹲 runner、AgentDeputy Logo 和星芒。
+- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项为客户端状态和 AgentDeputy Logo。
 - 选择 AgentDeputy Logo 后，运行中任务会触发外层线条顺时针沿边缘移动的动画；空闲时恢复原始 SVG 图形。
 
 ## 已接入的任务来源
@@ -22,6 +23,8 @@ AgentDeputy 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务�
 
 - Codex / ChatGPT：通过本地 `codex app-server` 和 session 状态读取任务。
 - Claude Code：通过 CLI Hooks 读取任务，并提供账号登记、重登和手动切换。
+
+首次使用 Codex 权限提醒时，在 AgentDeputy 设置中点击“Codex 交互提醒 → 连接”，然后到 Codex CLI 的 `/hooks` 检查并信任新 Hook。该操作只向 `~/.codex/hooks.json` 合并 `PermissionRequest` 回调，保留其他 Hook；交互式问答由本地 session JSONL 中的结构化工具调用识别，不需要 Hook。审批浮窗会临时完整展示 Hook 传来的请求内容；内容过长或不可读取时不能直接同意，必须在 Codex 中确认。若 60 秒内未选择、AgentDeputy 未运行、Hook 未信任或已禁用，AgentDeputy 不作决定，Codex 使用自身的审批流程。开发构建使用独立的数据目录和可执行文件；不要用开发构建连接日常 Codex 配置。
 
 旧版可能已在其他客户端配置中安装 Kestra Hook / 扩展；新版本不会改写这些外部配置。Claude Code 的旧 Hook 若仍指向 Kestra.app，设置页会显示未连接，需手动重新接入 AgentDeputy。若要彻底清理已退役的其他客户端 Hook，请在对应客户端中手动移除。
 
