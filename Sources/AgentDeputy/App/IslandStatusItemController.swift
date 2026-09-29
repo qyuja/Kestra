@@ -640,6 +640,7 @@ final class IslandStatusItemController: NSObject {
 
         guard let popover, !popover.isShown else { return }
         store.refreshNow()
+        updater.checkForUpdatesAutomatically()
         configureButton()
         popover.show(
             relativeTo: button.bounds,

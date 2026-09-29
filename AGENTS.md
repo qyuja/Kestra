@@ -7,6 +7,9 @@
 
 ## Compact log
 
+- 2026-09-29: Implement the approved hourly, launch, main-popover-open, and manual update checks. Keep version-only Sparkle probes separate from explicit download/relaunch; expose actual download percentages, coalesce overlapping requests, and validate only in the isolated Dev bundle. Installed apps and production preferences stay untouched.
+  Validation: 118 tests passed, Dev build/signature verified, real feed reported up-to-date, and the effective interval was 3600 seconds. UI automation was intermittent; actual signed download/relaunch remains unverified. The appcast test fixture uses Sparkle's deprecated dictionary initializer only for version-independent data.
+
 - 2026-09-28: Isolated Dev synthetic permission tests clicked Deny, Allow Once, and Open Codex: Hook returned deny, allow, and no decision respectively; all 11 focused tests passed. Two rapid follow-up requests unexpectedly returned allow amid desktop-automation/UI interference, while a no-click request stayed pending for five seconds; cause remains unverified. Real Codex approval E2E remains unverified. Do not touch installed apps or daily Hook configuration.
 
 - 2026-09-28: Add Codex interactive-attention monitoring without subscribing to another app-server connection: detect new `request_user_input` calls from session JSONL and use an opt-in `PermissionRequest` Hook for approvals. Persist only event metadata, never auto-answer or approve, avoid replaying old events, and keep Hook installation out of the isolated Dev bundle unless `CODEX_HOME` is explicitly set. Tests and Dev build are not real Codex Hook/trust E2E verification.

@@ -126,17 +126,26 @@ struct StatusPopoverView: View {
 
             if let availableVersion = updater.availableVersion {
                 Button(action: updater.installAvailableUpdate) {
-                    Image(systemName: updater.isInstalling ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(StatusPopoverStyle.selectionColor)
-                        .frame(width: 28, height: 28)
-                        .background(.primary.opacity(0.08), in: Circle())
-                        .symbolEffect(.rotate, options: .repeat(.continuous), isActive: updater.isInstalling)
+                    ZStack {
+                        if let percentage = updater.downloadPercentage {
+                            Text("\(percentage)%")
+                                .font(.system(size: 10, weight: .semibold))
+                                .monospacedDigit()
+                                .accessibilityLabel("下载进度 \(percentage)%")
+                        } else {
+                            Image(systemName: updater.isInstalling ? "arrow.triangle.2.circlepath" : "arrow.down.circle")
+                                .font(.system(size: 14, weight: .semibold))
+                                .symbolEffect(.rotate, options: .repeat(.continuous), isActive: updater.isInstalling)
+                        }
+                    }
+                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+                    .frame(width: 28, height: 28)
+                    .background(.primary.opacity(0.08), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!updater.canCheckForUpdates || updater.isInstalling || store.switchingAccountID != nil)
-                .help("下载并安装 AgentDeputy \(availableVersion)")
-                .accessibilityLabel("下载并安装 AgentDeputy \(availableVersion)")
+                .help(updater.isInstalling ? updater.statusText : "下载并安装 AgentDeputy \(availableVersion)")
+                .accessibilityLabel(updater.isInstalling ? updater.statusText : "下载并安装 AgentDeputy \(availableVersion)")
             }
 
             Spacer(minLength: 8)
@@ -1035,27 +1044,38 @@ struct StatusPopoverView: View {
         VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
             settingsGroupTitle("更新")
 
-            HStack(spacing: layoutMode.spacing(10)) {
-                Image(systemName: "arrow.down.circle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(StatusPopoverStyle.selectionColor)
+            VStack(alignment: .leading, spacing: layoutMode.spacing(8)) {
+                HStack(spacing: layoutMode.spacing(10)) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(StatusPopoverStyle.selectionColor)
 
-                VStack(alignment: .leading, spacing: 2) {
                     Text("自动检查新版本")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(StatusPopoverStyle.primaryText)
+
+                    Spacer(minLength: 8)
+
+                    Toggle("自动检查新版本", isOn: $updater.automaticallyChecksForUpdates)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .disabled(!updater.isConfigured)
+                        .help("每小时、启动时、打开主面板时检查新版本")
+                }
+
+                HStack(spacing: layoutMode.spacing(8)) {
                     Text(updater.statusText)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(StatusPopoverStyle.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 8)
+
+                    Button(updater.isChecking ? "检查中…" : "检查更新", action: updater.checkForUpdates)
+                        .controlSize(.small)
+                        .disabled(!updater.canCheckForUpdates || updater.isChecking || updater.isInstalling)
                 }
-
-                Spacer(minLength: 8)
-
-                Toggle("自动检查新版本", isOn: $updater.automaticallyChecksForUpdates)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .disabled(!updater.isConfigured)
             }
             .padding(layoutMode.spacing(10))
             .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))

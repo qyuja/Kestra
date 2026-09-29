@@ -81,7 +81,7 @@ if [[ "$SPARKLE_ENABLED" == "true" ]]; then
   <key>SURequireSignedFeed</key>
   <true/>
   <key>SUScheduledCheckInterval</key>
-  <integer>86400</integer>
+  <integer>3600</integer>
 PLIST
 )
 fi
