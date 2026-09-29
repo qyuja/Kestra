@@ -1,147 +1,56 @@
 # AgentDeputy
 
-![AgentDeputy logo](agentdeputy-logo/logo.png)
+![AgentDeputy](agentdeputy-logo/logo.png)
 
-AgentDeputy 是一个面向 macOS 26 的原生状态栏 AI coding agent 任务雷达：在后台监听本地 agent 客户端，把运行中任务数、任务摘要和完成提醒放到一个随时可见的状态栏入口里。
+**让 AI 继续工作，你不用守着对话窗口。**
 
-## 功能
+AgentDeputy 是一款 macOS 状态栏应用，汇集本机 AI 编程客户端的任务状态。切到别的工作时，你仍能看到任务是否在运行、何时完成，以及是否需要回答问题或确认权限。
 
-- 状态栏图标显示运行状态；可选择客户端状态或 AgentDeputy Logo。
-- 任务 popover 中查看 Active / Recent 任务、thread name、最近一条 user 对话摘要、模型和 effort。
-- 支持客户端 tab、任务展开收起、运行时长和完成时间展示。
-- 任务完成后从屏幕指定位置弹出可点击的完成提醒，支持边、角和中心位置，以及独立的 In / Out 动画、速度和停留时长设置。
-- Codex 会话出现交互式问答时，根据本地会话协议记录弹出“需要回答”提醒，点击可打开对应对话；权限审批通过 `PermissionRequest` Hook 弹出请求详情，可选择“同意一次”“拒绝”或打开 Codex。AgentDeputy 不会自动回答或批准。
-- 账号管理和手动切换目前面向 Codex / ChatGPT 与 Claude Code；切换前会阻止仍有运行任务的账号操作。
-- Codex 额度按 30 秒在后台轮询；可选在检测到额度窗口重置后，发送一次“只打招呼、不执行操作”的临时问候来尽早刷新额度状态。
-- 设置中支持使用 macOS 原生登录项注册开机自启动。
-- 状态栏图标支持资源型插件，可使用 PNG 帧或 macOS System Symbol，不加载或执行插件代码；内置选项为客户端状态和 AgentDeputy Logo。
-- 选择 AgentDeputy Logo 后，运行中任务会触发外层线条顺时针沿边缘移动的动画；空闲时恢复原始 SVG 图形。
+## 一眼掌握任务进度
 
-## 已接入的任务来源
+- **状态栏入口**：查看正在运行的任务与额度。任务运行时，AgentDeputy Logo 会播放轻量动画；鼠标悬停可快速查看当前任务和额度。
+- **任务列表**：按客户端查看正在运行和最近的对话，包括任务名称、用户消息预览、模型、effort、运行时长或完成时间。可从任务卡片回到对应对话。
+- **完成提醒**：任务结束时在屏幕上弹出可点击的提醒。你可以选择提醒位置、进入和退出动画、速度与停留时长，也可以在客户端位于前台时关闭提醒。
+- **需要你处理时提醒**：Codex 会话等待交互式回答或权限确认时显示提醒。权限请求可在提醒中选择同意一次、拒绝，或打开 Codex 处理。
+- **多账号与额度**：管理并手动切换 Codex / ChatGPT、Claude Code 账号；Codex 账号可查看额度与重置时间。运行中的任务会阻止账号切换，避免打断工作。
 
-目前只接入以下两个本地客户端：
+目前支持 **Codex / ChatGPT** 和 **Claude Code** 的本地任务。AgentDeputy 监听的是客户端中的工作任务；模型名称和 effort 显示为任务信息，不把普通网页聊天当成可运行任务。
 
-- Codex / ChatGPT：通过本地 `codex app-server` 和 session 状态读取任务。
-- Claude Code：通过 CLI Hooks 读取任务，并提供账号登记、重登和手动切换。
+## 开始使用
 
-首次使用 Codex 权限提醒时，在 AgentDeputy 设置中点击“Codex 交互提醒 → 连接”，然后到 Codex CLI 的 `/hooks` 检查并信任新 Hook。该操作只向 `~/.codex/hooks.json` 合并 `PermissionRequest` 回调，保留其他 Hook；交互式问答由本地 session JSONL 中的结构化工具调用识别，不需要 Hook。审批浮窗会临时完整展示 Hook 传来的请求内容；内容过长或不可读取时不能直接同意，必须在 Codex 中确认。若 60 秒内未选择、AgentDeputy 未运行、Hook 未信任或已禁用，AgentDeputy 不作决定，Codex 使用自身的审批流程。开发构建使用独立的数据目录和可执行文件；不要用开发构建连接日常 Codex 配置。
+1. 从 [Releases](https://github.com/qyuja/Kestra/releases) 下载最新的 macOS DMG，将 AgentDeputy 拖入“应用程序”并打开。
+2. 点击状态栏中的 AgentDeputy 图标，在设置中选择要显示的客户端，并连接相应的本地任务来源。
+3. 开始一个 Codex 或 Claude Code 任务。切换到其他窗口后，使用状态栏和悬停浮窗查看进度；完成或需要操作时会收到提醒。
 
-旧版可能已在其他客户端配置中安装 Kestra Hook / 扩展；新版本不会改写这些外部配置。Claude Code 的旧 Hook 若仍指向 Kestra.app，设置页会显示未连接，需手动重新接入 AgentDeputy。若要彻底清理已退役的其他客户端 Hook，请在对应客户端中手动移除。
+首次使用 Codex 权限提醒，需要在设置中连接 Codex 交互提醒，并在 Codex 的 `/hooks` 中信任新 Hook。交互式问答提醒从本地会话读取，不需要这一步。Claude Code 任务提醒需在设置中连接其 Hooks。
 
-这里只监听 coding/work agent 的任务，不把普通网站聊天或纯聊天模型本身当作任务来源。模型和 effort 是任务属性。
+要求 macOS 26 或更新版本。如果 macOS 首次阻止打开下载的应用，可在 Finder 中右键应用并选择“打开”。
 
-## 构建和运行
+## 按自己的习惯设置
 
-要求：macOS 26、Swift 6.2 或更新版本。
+- 自定义状态栏图标、任务预览显示第一条或最后一条用户消息，以及浅色、深色或跟随系统的主题。
+- 为完成提醒单独设置出现位置、进入动画、退出动画、动画速度和停留时长；可直接在设置中播放预览。
+- 选择是否开机自启动、自动检查新版本，并在有新版本时从应用内下载更新。
+- 可选开启 Codex 额度重置后的简短问候。开启后，检测到额度窗口重置时会向对应账号发送一次真实请求。
+- 支持资源型[状态栏图标插件](icon-plugins/README.md)：从设置中打开插件目录、添加图标资源并重新加载。
+
+## 隐私
+
+任务监听和界面展示在本机完成，AgentDeputy 不会把任务标题、对话摘要或提醒事件上传到自己的服务。Codex 与 Claude Code 仍按各自的客户端协议连接其服务。
+
+## 从源码构建
+
+需要 macOS 26 与 Swift 6.2 或更新版本：
 
 ```bash
 git clone https://github.com/qyuja/Kestra.git AgentDeputy
 cd AgentDeputy
-
 swift test
 ./script/build_and_run.sh
 ```
 
-直接运行脚本会构建并打开隔离的 `dist/AgentDeputyDev.app`，不会关闭或复用已安装的 `/Applications/Kestra.app`。需要生成 production-shaped bundle 但不启动应用时使用：
-
-```bash
-./script/build_and_run.sh package
-```
-
-构建并做进程检查：
-
-```bash
-./script/build_and_run.sh --verify
-```
-
-发布构建会接入 Sparkle 自动更新：开启自动检查后，每小时、每次启动以及打开主面板时检查新版本；设置中也可手动点击“检查更新”。检查只查询版本，不下载安装。发现新版本后，点击顶部升级按钮才会下载，显示进度百分比，并由 Sparkle 验证、重启替换。检查进行中不会重复发起请求。开发构建默认不启用更新源；需要本地验证时可执行：
-
-```bash
-SPARKLE_ENABLED=true ./script/build_and_run.sh package
-```
-
-发布 DMG：
-
-```bash
-git tag v0.1.1
-git push origin v0.1.1
-```
-
-也可以使用发布脚本。脚本要求工作树已经提交干净，会先运行 Swift 测试，再推送当前分支并创建、推送版本 tag：
-
-```bash
-./script/push_release.sh 0.1.14
-```
-
-正式推送前可以先预检，不会创建或推送 tag：
-
-```bash
-./script/push_release.sh --dry-run 0.1.14
-```
-
-推送 `v*` tag 会触发 GitHub Actions，在 macOS 26 runner 上测试、构建并把 `AgentDeputy-v*.dmg` 上传到对应 Release；也可以在 Actions 页面手动运行并填写 tag。
-
-Actions 默认使用 ad-hoc 签名，适合本机验证但不会通过 Gatekeeper。要让其他 Mac 直接双击打开，需要在仓库 Secrets 配置 `MACOS_CERTIFICATE_P12_BASE64`、`MACOS_CERTIFICATE_PASSWORD`、`MACOS_KEYCHAIN_PASSWORD`，以及 notarization 所需的 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_PASSWORD`。
-
-自动更新发布还需要配置 `SPARKLE_ED25519_PRIVATE_KEY` Secret。它只用于 GitHub Actions 给更新 archive 和 appcast 签名，不能提交到仓库。没有这个 Secret 时，Actions 仍会发布 DMG，但不会把该版本作为应用内自动更新源发布。
-
-应用是状态栏应用，不创建常规控制窗口。`run` 模式使用独立的 `AgentDeputyDev` 进程和数据目录；`package` 模式在 `dist/AgentDeputy.app` 生成经过完整 bundle 校验的包，不会终止正在运行的应用。没有 Developer ID 时，首次打开下载包请在 Finder 中右键选择“打开”。
-
-如果下载后 macOS 提示无法验证开发者或应用不安全，请先确认 DMG 来源可信，将 `AgentDeputy.app` 拖入“应用程序”，再执行（命令是 `xattr`，不是 `xttr`）：
-
-```bash
-xattr -dr com.apple.quarantine /Applications/AgentDeputy.app
-open /Applications/AgentDeputy.app
-```
-
-## 图标插件
-
-插件目录为：
-
-```text
-~/Library/Application Support/com.kiannest.agentdeputy/icon-plugins
-```
-
-每个子目录包含一个 `manifest.json`，资源插件支持：
-
-```json
-{
-  "schemaVersion": 1,
-  "id": "circle-example",
-  "name": "Circle Example",
-  "systemSymbol": "circle"
-}
-```
-
-也可以把 `frames` 设置为包内相对 PNG 路径数组。`frames` 与 `systemSymbol` 二选一。设置页提供打开目录和重新加载入口。完整字段、大小限制和安全规则见[图标插件说明](icon-plugins/README.md)。
-
-## 本地数据和隐私边界
-
-- AgentDeputy 的任务监听完全在本机完成；任务标题、对话摘要和 Hook 事件不会上传到任何服务。
-- Codex 与 Claude Code 仍按各自协议访问服务；AgentDeputy 不替换模型请求。
-- 账号切换只保存必要的本地账号元数据；凭据保存在客户端文件或 macOS 钥匙串中，不写入任务列表、README、日志或 Git 仓库。
-- 应用数据默认位于 `~/Library/Application Support/com.kiannest.agentdeputy/`；首次启动会复制旧 Kestra 数据与设置，旧目录保留。Codex 的 session 和设置继续使用用户现有的 `~/.codex`，不会复制到仓库。
-- 应用不会扫描或上传完整历史；任务预览只读取界面需要的截断内容。
-- 额度唤醒只处理本地 Codex app-server 返回的额度快照。开启后，在检测到重置时，会通过独立临时线程向对应账号发送一次真实问候请求；该请求可能消耗额度，临时线程不会写入持久会话，也不会阻塞运行中的任务。
-
-## 当前限制
-
-- 默认发布链路仍允许 ad-hoc 签名；没有 Developer ID 和 notarization 时，DMG 和自动更新包可以做结构验证，但其他 Mac 可能仍需要右键打开或移除 quarantine。
-- 自动更新依赖 GitHub Release 的 `appcast.xml` 和 Sparkle Ed25519 签名；发布前必须配置 `SPARKLE_ED25519_PRIVATE_KEY`，并建议同时配置 Developer ID/notarization。
-- 额度重置检测需要 Codex 返回稳定的 `resetsAt` 和明显恢复的剩余额度；数据缺失或无法确认重置时不会发送。当前只有 Codex app-server 接入了这条额度唤醒链路，Claude Code 暂无同等协议。
-- Codex app-server 与 Claude Code Hook 协议会随客户端版本变化；单元测试不等于真实客户端端到端验证。
-- 客户端被强制结束且没有产生结束事件时，AgentDeputy 无法凭本地协议准确推断任务已结束。
-- Claude Code 的真实账号切换尚未完成双账号端到端验收；不应把隔离测试当成真实登录验证。
-- `ProviderLogos` 中的图标来自第三方资源。它们不属于本项目 MIT 许可证覆盖范围，重新分发前请核对 Icons8 的授权和 attribution 要求，或替换为自有资源。
-
-更多设计和架构背景见：
-
-- [账号与任务交接](docs/account-task-bridge.md)
-- [Claude Code 账号](docs/claude-code-accounts.md)
-- [Codex 额度唤醒](docs/limit-refresh.md)
-- [图标插件](icon-plugins/README.md)
-- [开源准备检查](docs/open-source-readiness.md)
+脚本会构建并打开独立的开发版，不会替换已安装的正式应用。
 
 ## 许可证
 
-AgentDeputy 源码采用 [MIT License](LICENSE)。第三方资源、客户端 SDK、商标和服务仍受各自的许可证或使用条款约束。
+AgentDeputy 源码采用 [MIT License](LICENSE)。第三方图标和商标不在本项目的 MIT 授权范围内，使用时需遵守各自的授权条款。

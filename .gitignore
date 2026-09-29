@@ -7,3 +7,17 @@ dist/
 .env.*
 !.env.example
 *.log
+
+# Local project notes and superseded design/release materials.
+/AGENTS.md
+/docs/
+/legacy-brand-assets/
+/legacy-brand-assets.zip
+/agentdeputy-logo.zip
+/agentdeputy-logo/README.md
+/agentdeputy-logo/preview.png
+/agentdeputy-logo/preview-dark.png
+/agentdeputy-logo/size-check.png
+/agentdeputy-logo/size-check-dark.png
+/agentdeputy-logo/bar-icon-animation.gif
+/agentdeputy-logo/bar-icon-poses.png
