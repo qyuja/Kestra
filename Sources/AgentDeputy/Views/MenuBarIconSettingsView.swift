@@ -25,7 +25,7 @@ struct MenuBarIconSettingsView: View {
     }
 
     private var iconOptions: some View {
-        VStack(spacing: layoutMode.spacing(6)) {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: layoutMode.spacing(6)) {
             if squatRunner.options.isEmpty {
                 Text("暂无可用图标")
                     .font(.system(size: 11, weight: .medium))
@@ -60,7 +60,7 @@ struct MenuBarIconSettingsView: View {
                     .foregroundStyle(
                         isSelected
                             ? StatusPopoverStyle.primaryText
-                            : StatusPopoverStyle.primaryText.opacity(0.58)
+                            : StatusPopoverStyle.secondaryText
                     )
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -73,7 +73,7 @@ struct MenuBarIconSettingsView: View {
                     .opacity(isSelected ? 1 : 0)
             }
             .padding(.horizontal, layoutMode.spacing(9))
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
             .background(
                 isSelected
                     ? StatusPopoverStyle.selectedTile
@@ -85,6 +85,7 @@ struct MenuBarIconSettingsView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(option.name)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .help(option.name)
     }
 
     private var actionRow: some View {

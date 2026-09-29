@@ -4,12 +4,29 @@ import SwiftUI
 
 enum StatusPopoverStyle {
     static let selectionColor = AgentDeputyPalette.accent
-    static let surface = Color(nsColor: .windowBackgroundColor)
-    static let tile = Color(nsColor: .controlBackgroundColor)
+    private static func adaptive(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        })
+    }
+    static let surface = adaptive(
+        light: NSColor(srgbRed: 0.955, green: 0.959, blue: 0.971, alpha: 1),
+        dark: NSColor(srgbRed: 0.090, green: 0.094, blue: 0.110, alpha: 1)
+    )
+    static let tile = adaptive(
+        light: .white,
+        dark: NSColor(srgbRed: 0.145, green: 0.153, blue: 0.176, alpha: 1)
+    )
     static let selectedTile = AgentDeputyPalette.selectedFill
-    static let divider = Color(nsColor: .separatorColor)
-    static let primaryText = Color.primary.opacity(0.88)
-    static let secondaryText = Color.secondary.opacity(0.82)
+    static let divider = adaptive(
+        light: NSColor(srgbRed: 0.855, green: 0.865, blue: 0.890, alpha: 1),
+        dark: NSColor(srgbRed: 0.230, green: 0.239, blue: 0.278, alpha: 1)
+    )
+    static let primaryText = Color.primary
+    static let secondaryText = adaptive(
+        light: NSColor(srgbRed: 0.345, green: 0.365, blue: 0.420, alpha: 1),
+        dark: NSColor(srgbRed: 0.745, green: 0.755, blue: 0.795, alpha: 1)
+    )
 }
 
 struct StatusPopoverView: View {
@@ -409,16 +426,15 @@ struct StatusPopoverView: View {
 
     private var settingsSection: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: layoutMode.spacing(16)) {
-                themeSection
-                layoutSection
+            VStack(alignment: .leading, spacing: layoutMode.spacing(12)) {
+                appearanceSection
                 providerVisibilitySection
+                codexAttentionSection
                 MenuBarIconSettingsView(
                     squatRunner: squatRunner
                 )
 
                 taskPreviewRow
-                codexAttentionSection
                 displayPositionSection
                 completionAnimationSection
                 timingSection
@@ -438,6 +454,18 @@ struct StatusPopoverView: View {
         .frame(maxHeight: .infinity)
     }
 
+    private var appearanceSection: some View {
+        VStack(alignment: .leading, spacing: layoutMode.spacing(7)) {
+            settingsGroupTitle("外观")
+            VStack(spacing: 0) {
+                themeSection
+                settingsDivider.padding(.horizontal, layoutMode.spacing(10))
+                layoutSection
+            }
+            .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
     private var layoutSection: some View {
         HStack(spacing: layoutMode.spacing(8)) {
             Image(systemName: "rectangle.compress.vertical")
@@ -445,7 +473,7 @@ struct StatusPopoverView: View {
                 .foregroundStyle(StatusPopoverStyle.selectionColor)
 
             Text("内容布局")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(StatusPopoverStyle.primaryText)
 
             Spacer(minLength: 4)
@@ -467,8 +495,7 @@ struct StatusPopoverView: View {
             .frame(width: 116)
         }
         .padding(.horizontal, layoutMode.spacing(9))
-        .frame(minHeight: 28)
-        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
+        .frame(minHeight: 38)
     }
 
     private var codexAttentionSection: some View {
@@ -531,7 +558,6 @@ struct StatusPopoverView: View {
             .frame(width: 126)
         }
         .padding(layoutMode.spacing(10))
-        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var preferredColorScheme: ColorScheme? {
@@ -593,8 +619,22 @@ struct StatusPopoverView: View {
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: layoutMode.spacing(10)) {
             HStack {
-                Text("已登记账号").font(.system(size: 10)).foregroundStyle(.secondary)
+                Text("已登记账号").font(.system(size: 10)).foregroundStyle(StatusPopoverStyle.secondaryText)
                 Spacer()
+                Button(action: store.refreshTaskStatus) {
+                    HStack(spacing: 4) {
+                        if store.isRefreshingTaskStatus {
+                            ProgressView().controlSize(.mini)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        Text("刷新任务状态")
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(StatusPopoverStyle.selectionColor)
+                .disabled(store.isRefreshingTaskStatus || store.switchingAccountID != nil)
                 Button(action: store.addAccount) {
                     Text(store.isAddingAccount ? "等待登录…" : "添加账号")
                         .font(.system(size: 11, weight: .medium))
@@ -608,6 +648,34 @@ struct StatusPopoverView: View {
                 }
             }
             accountRows
+            if store.accountProfiles.count > 1, let reason = store.accountSwitchBlockedReason {
+                Label(reason, systemImage: "info.circle")
+                    .font(.system(size: 10))
+                    .foregroundStyle(StatusPopoverStyle.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let status = store.taskStatusMessage {
+                Text(status)
+                    .font(.system(size: 10))
+                    .foregroundStyle(StatusPopoverStyle.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(store.taskStatusIssues) { issue in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(issue.title).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(issue.reason).foregroundStyle(.orange)
+                    }
+                    Text(issue.id)
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(StatusPopoverStyle.secondaryText)
+                        .textSelection(.enabled)
+                }
+                .font(.system(size: 10))
+                .padding(layoutMode.spacing(6))
+                .background(StatusPopoverStyle.selectedTile, in: RoundedRectangle(cornerRadius: 6))
+            }
             if let message = store.accountMessage {
                 Text(message)
                     .font(.system(size: 11))
@@ -643,18 +711,32 @@ struct StatusPopoverView: View {
         }
     }
 
+    @ViewBuilder
     private func accountRow(_ profile: CodexAccountProfile) -> some View {
         let isCurrent = profile.id == store.currentAccountID
+        let canSwitch = !isCurrent && store.accountSwitchBlockedReason == nil
+            && !store.isAddingAccount && store.switchingAccountID == nil && !store.isRegisteringAccount
+        if canSwitch {
+            Button { store.switchAccount(profile) } label: { accountRowContent(profile, isCurrent: false) }
+                .buttonStyle(.plain)
+                .help("切换账号")
+        } else {
+            accountRowContent(profile, isCurrent: isCurrent)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(isCurrent ? .isSelected : [])
+                .accessibilityHint(isCurrent ? "当前使用中" : store.accountSwitchBlockedReason ?? "暂不可切换账号")
+        }
+    }
+
+    private func accountRowContent(_ profile: CodexAccountProfile, isCurrent: Bool) -> some View {
         let quota = store.accountQuotas[profile.id]
         let usage = quota?.usage
-        let blocked = !isCurrent && store.accountSwitchBlockedReason != nil
-        return Button {
-            store.switchAccount(profile)
-        } label: {
-        HStack(spacing: layoutMode.spacing(8)) {
+        return HStack(spacing: layoutMode.spacing(8)) {
             accountAvatar(profile)
             VStack(alignment: .leading, spacing: 4) {
-                Text(profile.displayName).lineLimit(1).truncationMode(.middle)
+                Text(profile.displayName)
+                    .foregroundStyle(StatusPopoverStyle.primaryText)
+                    .lineLimit(1).truncationMode(.middle)
                 HStack(spacing: 5) {
                     Text(profile.isTeam ? "Team" : (profile.planType?.capitalized ?? "个人"))
                     if isCurrent {
@@ -663,7 +745,7 @@ struct StatusPopoverView: View {
                         Text("已登记")
                     }
                 }
-                .font(.system(size: 10)).foregroundStyle(.secondary)
+                .font(.system(size: 10)).foregroundStyle(StatusPopoverStyle.secondaryText)
             }
             Spacer(minLength: 2)
             if store.switchingAccountID == profile.id {
@@ -681,13 +763,11 @@ struct StatusPopoverView: View {
         }
         .font(.system(size: 11))
         .padding(layoutMode.spacing(8))
-        .background(StatusPopoverStyle.tile, in: RoundedRectangle(cornerRadius: 8))
-        .opacity(blocked ? 0.5 : 1)
+        .background(
+            isCurrent ? StatusPopoverStyle.selectedTile : StatusPopoverStyle.surface,
+            in: RoundedRectangle(cornerRadius: 8)
+        )
         .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isCurrent || blocked || store.isAddingAccount || store.switchingAccountID != nil || store.isRegisteringAccount)
-        .help(isCurrent ? "当前使用中" : store.accountSwitchBlockedReason ?? "切换账号")
     }
 
     private func quotaRing(_ window: CodexAccountUsage.Window?, fallback: String, error: String?) -> some View {
@@ -847,7 +927,7 @@ struct StatusPopoverView: View {
         HStack(spacing: layoutMode.spacing(10)) {
             Text("任务预览")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.86))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
 
             Spacer(minLength: 8)
 
@@ -890,7 +970,7 @@ struct StatusPopoverView: View {
             HStack(spacing: layoutMode.spacing(8)) {
                 Text(selectedAnimationDisplayName)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.86))
+                    .foregroundStyle(StatusPopoverStyle.primaryText)
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
@@ -1022,7 +1102,7 @@ struct StatusPopoverView: View {
             HStack(spacing: layoutMode.spacing(10)) {
                 Text("当前 AI 应用在前台时不提醒")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.68))
+                    .foregroundStyle(StatusPopoverStyle.primaryText)
 
                 Spacer(minLength: 8)
 
@@ -1178,7 +1258,7 @@ struct StatusPopoverView: View {
 
     private func settingsGroupTitle(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 10, weight: .semibold))
+            .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(StatusPopoverStyle.secondaryText)
             .textCase(.uppercase)
             .tracking(0.5)
@@ -1263,7 +1343,7 @@ private struct AnimationSelectionRow: View {
                     .foregroundStyle(
                         isSelected
                             ? StatusPopoverStyle.primaryText
-                            : StatusPopoverStyle.primaryText.opacity(0.58)
+                            : StatusPopoverStyle.secondaryText
                     )
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -1394,7 +1474,7 @@ private struct NumericSliderRow: View {
         HStack(spacing: layoutMode.spacing(10)) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(StatusPopoverStyle.primaryText.opacity(0.68))
+                .foregroundStyle(StatusPopoverStyle.primaryText)
                 .frame(width: 60, alignment: .leading)
 
             Slider(value: Binding(

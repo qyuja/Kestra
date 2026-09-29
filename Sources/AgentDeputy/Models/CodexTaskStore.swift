@@ -140,6 +140,9 @@ final class CodexTaskStore: ObservableObject {
     @Published private(set) var accountSwitchError: String?
     @Published private(set) var isRegisteringAccount = false
     @Published private(set) var accountMessage: String?
+    @Published private(set) var isRefreshingTaskStatus = false
+    @Published private(set) var taskStatusIssues: [CodexTaskStatusIssue] = []
+    @Published private(set) var taskStatusMessage: String?
     private let accountStore = TaskBridgeStore()
 
     func addAccount() { loginAccount(replacing: nil) }
@@ -221,13 +224,45 @@ final class CodexTaskStore: ObservableObject {
     }
 
     var accountSwitchBlockedReason: String? {
-        CodexAccountSwitchPolicy.blockingReason(
+        if isRefreshingTaskStatus { return "正在刷新任务状态，请稍候" }
+        return CodexAccountSwitchPolicy.blockingReason(
             runningCount: runningTaskCount, connected: isConnected,
-            lastUpdated: lastUpdated, hasError: lastError != nil
+            lastUpdated: lastSuccessfulTaskListAt, hasError: lastError != nil
         )
     }
 
     func dismissAccountSwitchError() { accountSwitchError = nil }
+
+    func refreshTaskStatus() {
+        guard !isRefreshingTaskStatus, switchingAccountID == nil else { return }
+        isRefreshingTaskStatus = true
+        taskStatusMessage = nil
+        taskStatusIssues = []
+        let generation = monitoringGeneration
+        Task { @MainActor in
+            defer {
+                isRefreshingTaskStatus = false
+                if generation == monitoringGeneration {
+                    pendingFullTaskRefresh = true
+                    refreshTasks()
+                }
+            }
+            do {
+                let records = try await latestRecordsForSwitch()
+                let snapshot = await CodexSessionActivityReader().snapshot(records: records)
+                guard generation == monitoringGeneration else { return }
+                taskStatusIssues = CodexAccountSwitchPolicy.issues(records: records, snapshot: snapshot)
+                lastSuccessfulTaskListAt = .now
+                lastError = nil
+                taskStatusMessage = taskStatusIssues.isEmpty
+                    ? "已检查 \(records.count) 个任务，未发现运行中或状态无法确认的任务"
+                    : "已检查 \(records.count) 个任务，以下 \(taskStatusIssues.count) 个需要注意"
+            } catch {
+                guard generation == monitoringGeneration else { return }
+                taskStatusMessage = "刷新失败：\(error.localizedDescription)"
+            }
+        }
+    }
 
     private func refreshAccountMonitoring(refreshImmediately: Bool = true) {
         accountUsageMonitor.updateProfiles(accountProfiles, activeAccountID: currentAccountID, activeHome: appServerClient.codexHome, refreshImmediately: refreshImmediately)
@@ -250,19 +285,15 @@ final class CodexTaskStore: ObservableObject {
                 do {
                     let records = try result.get()
                     self.switchTiming?.begin(.initialTaskScan)
-                    guard records.allSatisfy({ record in
-                        record.path.map { FileManager.default.isReadableFile(atPath: $0.path) } == true
-                    }) else {
-                        self.finishAccountSwitch(error: "部分任务状态不可读，未切换账号")
-                        return
-                    }
                     let snapshot = await CodexSessionActivityReader().snapshot(records: records)
                     guard self.switchingAccountID == profile.id else { return }
-                    guard snapshot.unknownThreadIDs.isEmpty else {
-                        self.finishAccountSwitch(error: "部分任务缺少可确认的生命周期状态，未切换账号")
+                    self.lastSuccessfulTaskListAt = .now
+                    self.taskStatusIssues = CodexAccountSwitchPolicy.issues(records: records, snapshot: snapshot)
+                    guard self.taskStatusIssues.isEmpty else {
+                        self.finishAccountSwitch(error: CodexAccountSwitchPolicy.issueSummary(self.taskStatusIssues, action: "未切换账号"))
                         return
                     }
-                    guard snapshot.activeThreadIDs.isEmpty, self.accountSwitchBlockedReason == nil else {
+                    guard self.accountSwitchBlockedReason == nil else {
                         self.finishAccountSwitch(error: self.accountSwitchBlockedReason ?? "任务已开始运行，未切换账号")
                         return
                     }
@@ -314,12 +345,13 @@ final class CodexTaskStore: ObservableObject {
         switchTiming?.begin(.finalTaskList)
         let records = try await latestRecordsForSwitch()
         switchTiming?.begin(.finalTaskScan)
-        guard records.allSatisfy({ $0.path.map { FileManager.default.isReadableFile(atPath: $0.path) } == true }) else {
-            throw SwitchError("部分任务状态不可读，未关闭 Codex")
-        }
         let snapshot = await CodexSessionActivityReader().snapshot(records: records)
-        guard snapshot.unknownThreadIDs.isEmpty else { throw SwitchError("部分任务状态无法确认，未关闭 Codex") }
-        guard snapshot.activeThreadIDs.isEmpty, accountSwitchBlockedReason == nil else {
+        lastSuccessfulTaskListAt = .now
+        taskStatusIssues = CodexAccountSwitchPolicy.issues(records: records, snapshot: snapshot)
+        guard taskStatusIssues.isEmpty else {
+            throw SwitchError(CodexAccountSwitchPolicy.issueSummary(taskStatusIssues, action: "未关闭 Codex"))
+        }
+        guard accountSwitchBlockedReason == nil else {
             throw SwitchError(accountSwitchBlockedReason ?? "任务已开始运行，未关闭 Codex")
         }
         // No force-quit: if the app refuses or asks to save, leave its login intact.
@@ -447,6 +479,7 @@ final class CodexTaskStore: ObservableObject {
     private var latestMessageRequestID = 0
     private var isMonitoring = false
     private var isRefreshing = false
+    private var pendingFullTaskRefresh = false
     private var isReadingActivity = false
     private var isReadingLatestMessages = false
     private var activityNotificationRefreshTask: Task<Void, Never>?
@@ -465,6 +498,7 @@ final class CodexTaskStore: ObservableObject {
     // changed, so keep the observable heartbeat below the monitor cadence.
     private let lastUpdatedPublishInterval: TimeInterval = 10
     private var lastPublishedUpdatedAt: Date = .distantPast
+    private var lastSuccessfulTaskListAt: Date?
     private let latestMessageRefreshInterval: TimeInterval = 10
     private let fullThreadListRefreshInterval: TimeInterval = 60
     private let activityDiscoveryBatchSize = 32
@@ -542,6 +576,7 @@ final class CodexTaskStore: ObservableObject {
     func stop() {
         monitoringGeneration += 1
         isRefreshing = false
+        pendingFullTaskRefresh = false
         isReadingActivity = false
         isMonitoring = false
         activityNotificationRefreshTask?.cancel()
@@ -549,6 +584,9 @@ final class CodexTaskStore: ObservableObject {
         lastClientStatusRefresh = .distantPast
         lastFullThreadListRefresh = .distantPast
         lastPublishedUpdatedAt = .distantPast
+        lastSuccessfulTaskListAt = nil
+        taskStatusIssues = []
+        taskStatusMessage = nil
         latestMessageRecordSignature = nil
         latestMessagePreviewMode = nil
         latestMessageReadAt = .distantPast
@@ -646,13 +684,14 @@ final class CodexTaskStore: ObservableObject {
 
     private func refreshTasks(forceFullHistory: Bool = false) {
         reconcileMissingAccount()
-        guard !isRefreshing else { return }
+        guard !isRefreshing, !isRefreshingTaskStatus, switchingAccountID == nil else { return }
         isRefreshing = true
         let generation = monitoringGeneration
         let hasPendingActivityDiscovery = pendingActivityDiscoveryIndex < pendingActivityDiscoveryRecords.count
-        let includeHistory = forceFullHistory
+        let includeHistory = forceFullHistory || pendingFullTaskRefresh
             || (!hasPendingActivityDiscovery
                 && Date.now.timeIntervalSince(lastFullThreadListRefresh) >= fullThreadListRefreshInterval)
+        pendingFullTaskRefresh = false
 
         appServerClient.requestThreadList(includeHistory: includeHistory) { [weak self] result in
             guard let self else { return }
@@ -663,6 +702,7 @@ final class CodexTaskStore: ObservableObject {
             case .success(let records):
                 self.lastError = nil
                 let now = Date.now
+                self.lastSuccessfulTaskListAt = now
                 if now.timeIntervalSince(self.lastPublishedUpdatedAt) >= self.lastUpdatedPublishInterval {
                     self.lastUpdated = now
                     self.lastPublishedUpdatedAt = now
@@ -699,6 +739,7 @@ final class CodexTaskStore: ObservableObject {
                 self.lastError = error.localizedDescription
                 self.logger.error("Codex snapshot failed: \(error.localizedDescription, privacy: .public)")
             }
+            if self.pendingFullTaskRefresh { self.refreshTasks() }
         }
     }
 

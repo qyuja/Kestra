@@ -30,12 +30,36 @@ final class TaskBridgeTests: XCTestCase {
     }
     func testAccountSwitchBlocksRunningUnknownAndStaleState() {
         let now = Date()
-        XCTAssertNotNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 1, connected: true, lastUpdated: now, hasError: false, now: now))
-        XCTAssertNotNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: false, lastUpdated: now, hasError: false, now: now))
+        XCTAssertEqual(CodexAccountSwitchPolicy.blockingReason(runningCount: 1, connected: true, lastUpdated: now, hasError: false, now: now), "任务运行中，暂不可切换账号")
+        XCTAssertEqual(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: false, lastUpdated: now, hasError: false, now: now), "Codex 监听未连接，无法读取任务状态")
         XCTAssertNotNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: true, lastUpdated: nil, hasError: false, now: now))
         XCTAssertNotNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: true, lastUpdated: now.addingTimeInterval(-6), hasError: false, now: now))
-        XCTAssertNotNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: true, lastUpdated: now, hasError: true, now: now))
+        XCTAssertEqual(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: true, lastUpdated: now, hasError: true, now: now), "读取 Codex 任务失败，请刷新任务状态")
         XCTAssertNil(CodexAccountSwitchPolicy.blockingReason(runningCount: 0, connected: true, lastUpdated: now, hasError: false, now: now))
+    }
+
+    func testAccountSwitchIssuesIdentifySpecificTasks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let readable = root.appendingPathComponent("session.jsonl")
+        try Data("{}\n".utf8).write(to: readable)
+        let records = [
+            CodexThreadRecord(id: "missing", title: "文件丢失", summary: "", updatedAt: .now, path: nil),
+            CodexThreadRecord(id: "unknown", title: "无法确认", summary: "", updatedAt: .now, path: readable),
+            CodexThreadRecord(id: "running", title: "正在编码", summary: "", updatedAt: .now, path: readable),
+            CodexThreadRecord(id: "idle", title: "已完成", summary: "", updatedAt: .now, path: readable)
+        ]
+        let snapshot = CodexActivitySnapshot(
+            activeThreadIDs: ["running"], completedTasks: [], unknownThreadIDs: ["missing", "unknown"]
+        )
+        let issues = CodexAccountSwitchPolicy.issues(records: records, snapshot: snapshot)
+        XCTAssertEqual(issues.map(\.id), ["missing", "unknown", "running"])
+        XCTAssertEqual(issues.map(\.reason), ["会话文件不可读", "缺少可确认的生命周期状态", "运行中"])
+        let message = CodexAccountSwitchPolicy.issueSummary(issues, action: "未切换账号")
+        XCTAssertTrue(message.contains("无法确认 [unknown]：缺少可确认的生命周期状态"))
+        XCTAssertTrue(message.contains("正在编码 [running]：运行中"))
+        XCTAssertFalse(message.contains("idle"))
     }
     func testAccountRegistrationDeduplicatesAndPreservesIdentity() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
